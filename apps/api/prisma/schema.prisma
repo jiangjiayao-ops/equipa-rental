@@ -1,0 +1,435 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  COMMERCIAL
+  OPERATIONS
+  FINANCE
+  MAINTENANCE
+  READ_ONLY
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  RESERVED
+  ON_RENT
+  IN_TRANSIT
+  MAINTENANCE
+  QUARANTINE
+  SOLD
+  RETIRED
+}
+
+enum BillingPeriod {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  CLOSED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+  WRITTEN_OFF
+}
+
+enum PaymentMethod {
+  PIX
+  BOLETO
+}
+
+enum FiscalDocType {
+  NFS_E
+  NF_E
+}
+
+enum FiscalDocStatus {
+  DRAFT
+  SUBMITTED
+  AUTHORIZED
+  REJECTED
+  CANCELLED
+}
+
+enum MobilizationType {
+  TO_SITE
+  FROM_SITE
+}
+
+enum MobilizationStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkOrderStatus {
+  SCHEDULED
+  OPEN
+  DONE
+  CANCELLED
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  tradeName String?
+  cnpj      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  branches  Branch[]
+  users     User[]
+}
+
+model Branch {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  code           String
+  name           String
+  city           String
+  state          String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  equipment      Equipment[]
+  proposals      Proposal[]
+  contracts      Contract[]
+  calendarBlocks CalendarBlock[]
+  mobilizations  MobilizationOrder[]
+  transfersFrom  BranchTransfer[] @relation("TransferFrom")
+  transfersTo    BranchTransfer[] @relation("TransferTo")
+
+  @@unique([organizationId, code])
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           Role         @default(READ_ONLY)
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Customer {
+  id           String            @id @default(cuid())
+  legalName    String
+  tradeName    String?
+  document     String            @unique
+  documentType String            @default("CNPJ")
+  email        String?
+  phone        String?
+  city         String?
+  state        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  contacts     CustomerContact[]
+  sites        CustomerSite[]
+  proposals    Proposal[]
+  contracts    Contract[]
+  invoices     Invoice[]
+}
+
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  name       String
+  email      String?
+  phone      String?
+  role       String?
+}
+
+model CustomerSite {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  name       String
+  address    String
+  city       String
+  state      String
+}
+
+model EquipmentCategory {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  name        String
+  nameEn      String?
+  equipment   Equipment[]
+  rateCards   RateCard[]
+}
+
+model Equipment {
+  id              String            @id @default(cuid())
+  code            String            @unique
+  categoryId      String
+  category        EquipmentCategory @relation(fields: [categoryId], references: [id])
+  branchId        String
+  branch          Branch            @relation(fields: [branchId], references: [id])
+  brand           String
+  model           String
+  year            Int?
+  serialNumber    String?
+  plate           String?
+  hourMeter       Float             @default(0)
+  status          EquipmentStatus   @default(AVAILABLE)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  proposalLines   ProposalLine[]
+  contractLines   ContractLine[]
+  calendarBlocks  CalendarBlock[]
+  mobilizations   MobilizationOrder[]
+  workOrders      WorkOrder[]
+  meterReadings   MeterReading[]
+  transfers       BranchTransfer[]
+}
+
+model MeterReading {
+  id          String    @id @default(cuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  hours       Float
+  recordedAt  DateTime  @default(now())
+  source      String    @default("manual")
+}
+
+model RateCard {
+  id         String            @id @default(cuid())
+  categoryId String
+  category   EquipmentCategory @relation(fields: [categoryId], references: [id])
+  name       String
+  weeklyRate Float
+  monthlyRate Float
+  yearlyRate Float
+  active     Boolean           @default(true)
+}
+
+model Proposal {
+  id         String         @id @default(cuid())
+  number     String         @unique
+  customerId String
+  customer   Customer       @relation(fields: [customerId], references: [id])
+  branchId   String
+  branch     Branch         @relation(fields: [branchId], references: [id])
+  status     ProposalStatus @default(DRAFT)
+  validUntil DateTime?
+  notes      String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  lines      ProposalLine[]
+  contracts  Contract[]
+}
+
+model ProposalLine {
+  id            String        @id @default(cuid())
+  proposalId    String
+  proposal      Proposal      @relation(fields: [proposalId], references: [id])
+  equipmentId   String?
+  equipment     Equipment?    @relation(fields: [equipmentId], references: [id])
+  description   String
+  billingPeriod BillingPeriod
+  unitRate      Float
+  quantity      Int           @default(1)
+  mobFee        Float         @default(0)
+  demobFee      Float         @default(0)
+}
+
+model Contract {
+  id            String           @id @default(cuid())
+  number        String           @unique
+  customerId    String
+  customer      Customer         @relation(fields: [customerId], references: [id])
+  branchId      String
+  branch        Branch           @relation(fields: [branchId], references: [id])
+  proposalId    String?
+  proposal      Proposal?        @relation(fields: [proposalId], references: [id])
+  status        ContractStatus   @default(DRAFT)
+  billingPeriod BillingPeriod
+  startDate     DateTime
+  endDate       DateTime
+  depositAmount Float            @default(0)
+  notes         String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  lines         ContractLine[]
+  amendments    ContractAmendment[]
+  invoices      Invoice[]
+  mobilizations MobilizationOrder[]
+  calendarBlocks CalendarBlock[]
+}
+
+model ContractLine {
+  id            String        @id @default(cuid())
+  contractId    String
+  contract      Contract      @relation(fields: [contractId], references: [id])
+  equipmentId   String
+  equipment     Equipment     @relation(fields: [equipmentId], references: [id])
+  description   String
+  billingPeriod BillingPeriod
+  unitRate      Float
+  mobFee        Float         @default(0)
+  demobFee      Float         @default(0)
+}
+
+model ContractAmendment {
+  id          String         @id @default(cuid())
+  contractId  String
+  contract    Contract       @relation(fields: [contractId], references: [id])
+  type        String
+  notes       String?
+  fromPeriod  BillingPeriod?
+  toPeriod    BillingPeriod?
+  createdAt   DateTime       @default(now())
+}
+
+model CalendarBlock {
+  id          String   @id @default(cuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  contractId  String?
+  contract    Contract? @relation(fields: [contractId], references: [id])
+  startDate   DateTime
+  endDate     DateTime
+  reason      String
+}
+
+model MobilizationOrder {
+  id          String             @id @default(cuid())
+  contractId  String
+  contract    Contract           @relation(fields: [contractId], references: [id])
+  equipmentId String
+  equipment   Equipment          @relation(fields: [equipmentId], references: [id])
+  branchId    String
+  branch      Branch             @relation(fields: [branchId], references: [id])
+  type        MobilizationType
+  status      MobilizationStatus @default(SCHEDULED)
+  scheduledAt DateTime
+  completedAt DateTime?
+  carrier     String?
+  cost        Float              @default(0)
+  siteAddress String?
+}
+
+model BranchTransfer {
+  id          String    @id @default(cuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id])
+  fromBranchId String
+  fromBranch  Branch    @relation("TransferFrom", fields: [fromBranchId], references: [id])
+  toBranchId  String
+  toBranch    Branch    @relation("TransferTo", fields: [toBranchId], references: [id])
+  status      String    @default("COMPLETED")
+  transferredAt DateTime @default(now())
+  notes       String?
+}
+
+model Invoice {
+  id         String          @id @default(cuid())
+  number     String          @unique
+  customerId String
+  customer   Customer        @relation(fields: [customerId], references: [id])
+  contractId String?
+  contract   Contract?       @relation(fields: [contractId], references: [id])
+  status     InvoiceStatus   @default(DRAFT)
+  issueDate  DateTime        @default(now())
+  dueDate    DateTime
+  totalAmount Float
+  notes      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  lines      InvoiceLine[]
+  payments   Payment[]
+  fiscalDocs FiscalDocument[]
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id])
+  description String
+  quantity    Float   @default(1)
+  unitAmount  Float
+  totalAmount Float
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  invoiceId String
+  invoice   Invoice       @relation(fields: [invoiceId], references: [id])
+  method    PaymentMethod
+  amount    Float
+  paidAt    DateTime
+  externalRef String?
+  notes     String?
+  createdAt DateTime      @default(now())
+}
+
+model FiscalDocument {
+  id           String          @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice         @relation(fields: [invoiceId], references: [id])
+  type         FiscalDocType   @default(NFS_E)
+  status       FiscalDocStatus @default(DRAFT)
+  provider     String          @default("mock")
+  providerRef  String?
+  accessKey    String?
+  authorizedAt DateTime?
+  payloadJson  String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model MaintenancePlan {
+  id             String   @id @default(cuid())
+  name           String
+  equipmentCode  String?
+  everyHours     Float?
+  everyDays      Int?
+  active         Boolean  @default(true)
+  workOrders     WorkOrder[]
+}
+
+model WorkOrder {
+  id          String          @id @default(cuid())
+  planId      String?
+  plan        MaintenancePlan? @relation(fields: [planId], references: [id])
+  equipmentId String
+  equipment   Equipment       @relation(fields: [equipmentId], references: [id])
+  title       String
+  status      WorkOrderStatus @default(SCHEDULED)
+  dueAt       DateTime?
+  completedAt DateTime?
+  notes       String?
+  createdAt   DateTime        @default(now())
+}
