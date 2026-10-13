@@ -145,6 +145,14 @@ export const dictionaries = {
       save: 'Salvar',
       adminOnly: 'Somente administradores podem editar.',
       equipmentCount: 'Equipamentos',
+      addBranch: 'Nova filial',
+      createBranch: 'Criar filial',
+      deleteBranch: 'Remover filial',
+      deleteConfirm:
+        'Remover esta filial? Só é permitido se não houver equipamentos, contratos, propostas ou outras dependências.',
+      deleteBlocked: 'Remoção bloqueada',
+      requiredHint: 'Obrigatório: código, nome do pátio, cidade e UF.',
+      cancel: 'Cancelar',
     },
     status: {
       AVAILABLE: 'Disponível',
@@ -310,6 +318,14 @@ export const dictionaries = {
       save: 'Save',
       adminOnly: 'Only administrators can edit.',
       equipmentCount: 'Equipment',
+      addBranch: 'New branch',
+      createBranch: 'Create branch',
+      deleteBranch: 'Remove branch',
+      deleteConfirm:
+        'Remove this branch? Only allowed when it has no equipment, contracts, proposals, or other dependencies.',
+      deleteBlocked: 'Delete blocked',
+      requiredHint: 'Required: code, site name, city, and state.',
+      cancel: 'Cancel',
     },
     status: {
       AVAILABLE: 'Available',

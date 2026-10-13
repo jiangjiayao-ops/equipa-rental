@@ -1,12 +1,21 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { BranchesService } from './branches.service';
 
-class UpdateBranchDto {
+class BranchProfileDto {
   @IsOptional()
   @IsString()
   name?: string;
@@ -56,6 +65,24 @@ class UpdateBranchDto {
   email?: string | null;
 }
 
+class CreateBranchDto extends BranchProfileDto {
+  @IsString()
+  @MinLength(1)
+  code!: string;
+
+  @IsString()
+  @MinLength(1)
+  name!: string;
+
+  @IsString()
+  @MinLength(1)
+  city!: string;
+
+  @IsString()
+  @MinLength(1)
+  state!: string;
+}
+
 @Controller('branches')
 @UseGuards(JwtAuthGuard)
 export class BranchesController {
@@ -71,10 +98,24 @@ export class BranchesController {
     return this.branches.get(id);
   }
 
+  @Post()
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  create(@Body() body: CreateBranchDto) {
+    return this.branches.create(body);
+  }
+
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
-  update(@Param('id') id: string, @Body() body: UpdateBranchDto) {
+  update(@Param('id') id: string, @Body() body: BranchProfileDto) {
     return this.branches.update(id, body);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  remove(@Param('id') id: string) {
+    return this.branches.remove(id);
   }
 }

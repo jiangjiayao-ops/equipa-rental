@@ -317,6 +317,16 @@ th {
   margin: 0.75rem 0 0;
 }
 
+.error-msg {
+  color: var(--danger);
+  margin: 0 0 0.75rem;
+}
+
+.danger-btn {
+  border-color: rgba(224, 122, 95, 0.45) !important;
+  color: var(--danger) !important;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -6,6 +6,7 @@ import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
 import { api } from '@/lib/api';
+import { formatCnpj } from '@/lib/brFormat';
 
 type Customer = {
   id: string;
@@ -37,7 +38,7 @@ export default function CustomersPage() {
           empty={t.empty}
           rows={rows.map((c) => [
             c.legalName,
-            c.document,
+            formatCnpj(c.document) || c.document,
             [c.city, c.state].filter(Boolean).join(' / ') || '—',
             String(c._count.contracts),
           ])}
