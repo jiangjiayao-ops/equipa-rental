@@ -49,6 +49,18 @@ enum ProposalStatus {
   EXPIRED
 }
 
+enum ProposalSendChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum ProposalSendStatus {
+  QUEUED
+  SENT
+  FAILED
+  DEV_OUTBOX
+}
+
 enum ContractStatus {
   DRAFT
   ACTIVE
@@ -261,21 +273,29 @@ model RateCard {
 }
 
 model Proposal {
-  id            String         @id @default(cuid())
-  number        String         @unique
-  customerId    String
-  customer      Customer       @relation(fields: [customerId], references: [id])
-  branchId      String
-  branch        Branch         @relation(fields: [branchId], references: [id])
-  status        ProposalStatus @default(DRAFT)
-  /// Copied to Contract on convert. Default ADVANCE (pay in advance).
-  billingTiming BillingTiming  @default(ADVANCE)
-  validUntil    DateTime?
-  notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  lines         ProposalLine[]
-  contracts     Contract[]
+  id               String                 @id @default(cuid())
+  number           String                 @unique
+  customerId       String
+  customer         Customer               @relation(fields: [customerId], references: [id])
+  branchId         String
+  branch           Branch                 @relation(fields: [branchId], references: [id])
+  status           ProposalStatus         @default(DRAFT)
+  /// Copied to Contract on accept/convert. Default ADVANCE.
+  billingTiming    BillingTiming          @default(ADVANCE)
+  validUntil       DateTime?
+  notes            String?
+  /// Opaque token for public client acceptance page (/p/:token).
+  publicToken      String?                @unique
+  acceptedOptionId String?
+  acceptedOption   ProposalOption?        @relation("AcceptedOption", fields: [acceptedOptionId], references: [id])
+  sentAt           DateTime?
+  acceptedAt       DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  lines            ProposalLine[]
+  options          ProposalOption[]       @relation("ProposalOptions")
+  sendAttempts     ProposalSendAttempt[]
+  contracts        Contract[]
 }
 
 model ProposalLine {
@@ -285,11 +305,43 @@ model ProposalLine {
   equipmentId   String?
   equipment     Equipment?    @relation(fields: [equipmentId], references: [id])
   description   String
+  /// Legacy/default period on the line; option.billingPeriod wins on accept.
   billingPeriod BillingPeriod
-  unitRate      Float
+  unitRate      Float         @default(0)
   quantity      Int           @default(1)
   mobFee        Float         @default(0)
   demobFee      Float         @default(0)
+}
+
+/// Period package the client can choose (e.g. 7 days, 30 days, monthly).
+model ProposalOption {
+  id            String        @id @default(cuid())
+  proposalId    String
+  proposal      Proposal      @relation("ProposalOptions", fields: [proposalId], references: [id], onDelete: Cascade)
+  label         String
+  billingPeriod BillingPeriod
+  durationDays  Int
+  unitRate      Float
+  mobFee        Float         @default(0)
+  demobFee      Float         @default(0)
+  sortOrder     Int           @default(0)
+  selected      Boolean       @default(false)
+  acceptedBy    Proposal[]    @relation("AcceptedOption")
+}
+
+model ProposalSendAttempt {
+  id          String              @id @default(cuid())
+  proposalId  String
+  proposal    Proposal            @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  channel     ProposalSendChannel
+  status      ProposalSendStatus
+  toAddress   String?
+  provider    String
+  providerRef String?
+  error       String?
+  publicUrl   String?
+  payloadJson String?
+  createdAt   DateTime            @default(now())
 }
 
 model Contract {

@@ -10,7 +10,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [ok, setOk] = useState(false);
 
   useEffect(() => {
-    if (pathname === '/login') {
+    const isPublic =
+      pathname === '/login' ||
+      pathname.startsWith('/p/') ||
+      pathname === '/p';
+    if (isPublic) {
       setOk(true);
       return;
     }

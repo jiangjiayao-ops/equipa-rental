@@ -325,7 +325,16 @@ async function main() {
     if (existing) {
       const updated = await prisma.customer.update({
         where: { id: existing.id },
-        data: { legalName: name, tradeName: name, documentType: 'CNPJ' },
+        data: {
+          legalName: name,
+          tradeName: name,
+          documentType: 'CNPJ',
+          email:
+            existing.email ??
+            `${cnpj.replace(/\D/g, '').slice(0, 8)}@cliente-demo.equipa.local`,
+          phone:
+            existing.phone ?? `+55 11 9${cnpj.replace(/\D/g, '').slice(-7)}`,
+        },
       });
       customerCache.set(cnpj, updated.id);
       return updated.id;
@@ -336,6 +345,8 @@ async function main() {
         tradeName: name,
         document: cnpj,
         documentType: 'CNPJ',
+        email: `${cnpj.replace(/\D/g, '').slice(0, 8)}@cliente-demo.equipa.local`,
+        phone: `+55 11 9${cnpj.replace(/\D/g, '').slice(-7)}`,
       },
     });
     customerCache.set(cnpj, created.id);

@@ -52,6 +52,18 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Public (unauthenticated) API calls for client proposal acceptance. */
+export async function publicApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set('Content-Type', 'application/json');
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export function formatBrl(value: number) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
