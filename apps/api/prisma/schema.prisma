@@ -33,6 +33,14 @@ enum BillingPeriod {
   YEARLY
 }
 
+/// When rent is invoiced relative to each rental period.
+/// ADVANCE (default): bill at period start — common for equipment rentals.
+/// ARREARS: bill at period end.
+enum BillingTiming {
+  ADVANCE
+  ARREARS
+}
+
 enum ProposalStatus {
   DRAFT
   SENT
@@ -234,19 +242,21 @@ model RateCard {
 }
 
 model Proposal {
-  id         String         @id @default(cuid())
-  number     String         @unique
-  customerId String
-  customer   Customer       @relation(fields: [customerId], references: [id])
-  branchId   String
-  branch     Branch         @relation(fields: [branchId], references: [id])
-  status     ProposalStatus @default(DRAFT)
-  validUntil DateTime?
-  notes      String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  lines      ProposalLine[]
-  contracts  Contract[]
+  id            String         @id @default(cuid())
+  number        String         @unique
+  customerId    String
+  customer      Customer       @relation(fields: [customerId], references: [id])
+  branchId      String
+  branch        Branch         @relation(fields: [branchId], references: [id])
+  status        ProposalStatus @default(DRAFT)
+  /// Copied to Contract on convert. Default ADVANCE (pay in advance).
+  billingTiming BillingTiming  @default(ADVANCE)
+  validUntil    DateTime?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  lines         ProposalLine[]
+  contracts     Contract[]
 }
 
 model ProposalLine {
@@ -274,6 +284,8 @@ model Contract {
   proposal      Proposal?        @relation(fields: [proposalId], references: [id])
   status        ContractStatus   @default(DRAFT)
   billingPeriod BillingPeriod
+  /// ADVANCE (default): invoice at period start. ARREARS: invoice at period end.
+  billingTiming BillingTiming    @default(ADVANCE)
   startDate     DateTime
   endDate       DateTime
   depositAmount Float            @default(0)
@@ -355,22 +367,27 @@ model BranchTransfer {
 }
 
 model Invoice {
-  id         String          @id @default(cuid())
-  number     String          @unique
-  customerId String
-  customer   Customer        @relation(fields: [customerId], references: [id])
-  contractId String?
-  contract   Contract?       @relation(fields: [contractId], references: [id])
-  status     InvoiceStatus   @default(DRAFT)
-  issueDate  DateTime        @default(now())
-  dueDate    DateTime
+  id          String          @id @default(cuid())
+  number      String          @unique
+  customerId  String
+  customer    Customer        @relation(fields: [customerId], references: [id])
+  contractId  String?
+  contract    Contract?       @relation(fields: [contractId], references: [id])
+  status      InvoiceStatus   @default(DRAFT)
+  issueDate   DateTime        @default(now())
+  dueDate     DateTime
+  /// Snapshot of contract billing timing at generation time.
+  billingTiming BillingTiming?
+  /// Rental period covered by this invoice (set from contract billing timing).
+  periodStart DateTime?
+  periodEnd   DateTime?
   totalAmount Float
-  notes      String?
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  lines      InvoiceLine[]
-  payments   Payment[]
-  fiscalDocs FiscalDocument[]
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  lines       InvoiceLine[]
+  payments    Payment[]
+  fiscalDocs  FiscalDocument[]
 }
 
 model InvoiceLine {

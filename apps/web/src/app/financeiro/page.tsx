@@ -12,8 +12,16 @@ type Invoice = {
   status: string;
   totalAmount: number;
   dueDate: string;
+  issueDate: string;
+  billingTiming?: 'ADVANCE' | 'ARREARS' | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  notes?: string | null;
   customer: { legalName: string };
-  contract?: { number: string } | null;
+  contract?: {
+    number: string;
+    billingTiming?: 'ADVANCE' | 'ARREARS';
+  } | null;
   payments: Array<{
     method: string;
     amount: number;
@@ -55,10 +63,33 @@ export default function FinancePage() {
               {inv.customer.legalName}
               {inv.contract ? ` · ${inv.contract.number}` : ''}
             </p>
+            {(inv.billingTiming || inv.contract?.billingTiming) ? (
+              <p>
+                {t.finance.billingTiming}:{' '}
+                <span className="badge warn">
+                  {t.status[
+                    (inv.billingTiming ??
+                      inv.contract?.billingTiming) as keyof typeof t.status
+                  ] ??
+                    inv.billingTiming ??
+                    inv.contract?.billingTiming}
+                </span>
+              </p>
+            ) : null}
             <p>
-              <strong>{formatBrl(inv.totalAmount)}</strong> · {t.finance.due}:{' '}
-              {formatDate(inv.dueDate, locale)}
+              <strong>{formatBrl(inv.totalAmount)}</strong>
+              {' · '}
+              {t.finance.issue}: {formatDate(inv.issueDate, locale)}
+              {' · '}
+              {t.finance.due}: {formatDate(inv.dueDate, locale)}
             </p>
+            {inv.periodStart && inv.periodEnd ? (
+              <p className="muted">
+                {t.finance.period}: {formatDate(inv.periodStart, locale)} →{' '}
+                {formatDate(inv.periodEnd, locale)}
+              </p>
+            ) : null}
+            {inv.notes ? <p className="muted">{inv.notes}</p> : null}
             <h3>{t.finance.payments}</h3>
             {inv.payments.length === 0 ? (
               <p className="muted">{t.empty}</p>

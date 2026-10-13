@@ -30,6 +30,16 @@ class FiscalDto {
   type?: FiscalDocType;
 }
 
+class GenerateInvoiceDto {
+  @IsOptional()
+  @IsString()
+  periodStart?: string;
+
+  @IsOptional()
+  @IsString()
+  periodEnd?: string;
+}
+
 @Controller('finance')
 @UseGuards(JwtAuthGuard)
 export class FinanceController {
@@ -43,6 +53,18 @@ export class FinanceController {
   @Get('invoices/:id')
   getInvoice(@Param('id') id: string) {
     return this.finance.getInvoice(id);
+  }
+
+  @Post('contracts/:contractId/invoices')
+  generateFromContract(
+    @Param('contractId') contractId: string,
+    @Body() body: GenerateInvoiceDto,
+  ) {
+    return this.finance.generateFromContract(
+      contractId,
+      body.periodStart,
+      body.periodEnd,
+    );
   }
 
   @Post('invoices/:id/payments')

@@ -6,6 +6,7 @@
  */
 import {
   BillingPeriod,
+  BillingTiming,
   ContractStatus,
   EquipmentStatus,
   PrismaClient,
@@ -325,6 +326,8 @@ async function main() {
           ? `Horas: limite ${row.hour_limit}/período`
           : '';
 
+    // Default ADVANCE (pay in advance) — standard for equipment rentals.
+    // Notes do not imply arrears for this fleet seed, so all 7 use ADVANCE.
     const contract = await prisma.contract.create({
       data: {
         number: contractNumber,
@@ -332,6 +335,7 @@ async function main() {
         branchId: branch.id,
         status: ContractStatus.ACTIVE,
         billingPeriod: BillingPeriod.MONTHLY,
+        billingTiming: BillingTiming.ADVANCE,
         startDate: start,
         endDate: end,
         depositAmount: 0,
@@ -374,6 +378,7 @@ async function main() {
   console.log('- start = date_b ?? date_a; end = end_date');
   console.log('- hour_limit / field_12 / field_25 → Contract.notes (+ hour note on line description)');
   console.log('- field_12 assumed payment day; field_25 retained with unknown meaning');
+  console.log('- billingTiming default ADVANCE (pay in advance) on all seeded contracts');
 }
 
 main()
