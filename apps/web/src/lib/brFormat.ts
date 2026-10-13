@@ -3,6 +3,20 @@ export function digitsOnly(value: string): string {
   return (value || '').replace(/\D/g, '');
 }
 
+/** CPF: 000.000.000-00 */
+export function formatCpf(value: string): string {
+  const d = digitsOnly(value).slice(0, 11);
+  const p1 = d.slice(0, 3);
+  const p2 = d.slice(3, 6);
+  const p3 = d.slice(6, 9);
+  const p4 = d.slice(9, 11);
+  let out = p1;
+  if (p2) out += `.${p2}`;
+  if (p3) out += `.${p3}`;
+  if (p4) out += `-${p4}`;
+  return out;
+}
+
 /** CNPJ: 00.000.000/0000-00 */
 export function formatCnpj(value: string): string {
   const d = digitsOnly(value).slice(0, 14);
@@ -17,6 +31,13 @@ export function formatCnpj(value: string): string {
   if (p4) out += `/${p4}`;
   if (p5) out += `-${p5}`;
   return out;
+}
+
+/** Auto CPF (≤11) or CNPJ (≤14) while typing. */
+export function formatCpfOrCnpj(value: string): string {
+  const d = digitsOnly(value);
+  if (d.length <= 11) return formatCpf(value);
+  return formatCnpj(value);
 }
 
 /** CEP: 00000-000 */
@@ -53,6 +74,13 @@ export function storeCnpj(value: string | null | undefined): string | null {
   const d = digitsOnly(value);
   if (d.length !== 14) return formatCnpj(value) || null;
   return formatCnpj(d);
+}
+
+export function storeCpfOrCnpj(value: string | null | undefined): string | null {
+  if (value == null || !digitsOnly(value)) return null;
+  const d = digitsOnly(value);
+  if (d.length <= 11) return formatCpf(d) || null;
+  return formatCnpj(d) || null;
 }
 
 export function storeCep(value: string | null | undefined): string | null {

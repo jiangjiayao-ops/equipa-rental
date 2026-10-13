@@ -454,6 +454,19 @@ th {
   width: 100%;
 }
 
+.inline-create {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  background: var(--chip-bg);
+}
+
+.inline-create h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
 .fleet-toolbar {
   display: flex;
   flex-wrap: wrap;

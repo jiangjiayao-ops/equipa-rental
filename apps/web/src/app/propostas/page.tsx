@@ -6,6 +6,12 @@ import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
 import { api, downloadApiFile, formatBrl } from '@/lib/api';
+import {
+  formatCpfOrCnpj,
+  formatPhoneBr,
+  storeCpfOrCnpj,
+  storePhone,
+} from '@/lib/brFormat';
 
 type BillingTiming = 'ADVANCE' | 'ARREARS';
 type BillingPeriod = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
@@ -51,7 +57,12 @@ type Proposal = {
   acceptedOption?: Option | null;
 };
 
-type Customer = { id: string; legalName: string };
+type Customer = {
+  id: string;
+  legalName: string;
+  email?: string | null;
+  phone?: string | null;
+};
 type Branch = { id: string; code: string; name: string };
 type Equipment = {
   id: string;
@@ -59,7 +70,8 @@ type Equipment = {
   brand: string;
   model: string;
   status: string;
-  branch?: { code: string };
+  branchId?: string;
+  branch?: { id?: string; code: string; name?: string };
   category?: { name: string };
 };
 
@@ -111,10 +123,21 @@ export default function ProposalsPage() {
     whatsapp: string;
   } | null>(null);
 
-  const [onlyAvailable, setOnlyAvailable] = useState(true);
+  /** Default off so contracted machines can be quoted; toggle to restrict. */
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [fleetBranchId, setFleetBranchId] = useState('');
   const [fleetSearch, setFleetSearch] = useState('');
   const [pickedId, setPickedId] = useState('');
   const [selectedMachines, setSelectedMachines] = useState<Equipment[]>([]);
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({
+    legalName: '',
+    tradeName: '',
+    document: '',
+    email: '',
+    phone: '',
+    contactName: '',
+  });
 
   const [form, setForm] = useState({
     customerId: '',
@@ -129,12 +152,16 @@ export default function ProposalsPage() {
     const q = fleetSearch.trim().toLowerCase();
     return equipment.filter((eq) => {
       if (onlyAvailable && eq.status !== 'AVAILABLE') return false;
+      if (fleetBranchId) {
+        const bid = eq.branchId || eq.branch?.id;
+        if (bid !== fleetBranchId) return false;
+      }
       if (selectedMachines.some((m) => m.id === eq.id)) return false;
       if (!q) return true;
       const hay = `${eq.code} ${eq.brand} ${eq.model} ${eq.branch?.code ?? ''} ${eq.category?.name ?? ''}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [equipment, onlyAvailable, fleetSearch, selectedMachines]);
+  }, [equipment, onlyAvailable, fleetBranchId, fleetSearch, selectedMachines]);
 
   const load = async () => {
     try {
@@ -157,8 +184,7 @@ export default function ProposalsPage() {
         customerId: prev.customerId || cust[0]?.id || '',
         branchId: prev.branchId || br[0]?.id || '',
       }));
-      const firstAvail = eq.find((e) => e.status === 'AVAILABLE');
-      setPickedId(firstAvail?.id || eq[0]?.id || '');
+      setPickedId(eq[0]?.id || '');
     } catch (err) {
       setError(apiError(err, t.error));
     }
@@ -167,6 +193,12 @@ export default function ProposalsPage() {
   useEffect(() => {
     load();
   }, [t.error]);
+
+  useEffect(() => {
+    if (!filteredFleet.some((e) => e.id === pickedId)) {
+      setPickedId(filteredFleet[0]?.id || '');
+    }
+  }, [filteredFleet, pickedId]);
 
   const open = async (id: string) => {
     setMessage('');
@@ -191,9 +223,52 @@ export default function ProposalsPage() {
     setPickedId(next?.id || '');
   };
 
+  const createCustomer = async () => {
+    setBusy('customer');
+    setError('');
+    setMessage('');
+    try {
+      const created = await api<Customer>('/customers', {
+        method: 'POST',
+        body: JSON.stringify({
+          legalName: newCustomer.legalName.trim(),
+          tradeName: newCustomer.tradeName.trim() || undefined,
+          document: storeCpfOrCnpj(newCustomer.document) || newCustomer.document,
+          documentType:
+            (newCustomer.document.replace(/\D/g, '').length || 0) <= 11
+              ? 'CPF'
+              : 'CNPJ',
+          email: newCustomer.email.trim() || null,
+          phone: storePhone(newCustomer.phone),
+          contactName: newCustomer.contactName.trim() || null,
+        }),
+      });
+      setCustomers((prev) =>
+        [...prev, created].sort((a, b) =>
+          a.legalName.localeCompare(b.legalName),
+        ),
+      );
+      setForm((prev) => ({ ...prev, customerId: created.id }));
+      setShowNewCustomer(false);
+      setNewCustomer({
+        legalName: '',
+        tradeName: '',
+        document: '',
+        email: '',
+        phone: '',
+        contactName: '',
+      });
+      setMessage(`${t.proposals.createCustomer}: ${created.legalName}`);
+    } catch (err) {
+      setError(apiError(err, t.error));
+    } finally {
+      setBusy('');
+    }
+  };
+
   const createProposal = async () => {
     if (!selectedMachines.length) {
-      setError(t.proposals.noAvailable);
+      setError(t.proposals.selectMachineHint);
       return;
     }
     setBusy('create');
@@ -331,6 +406,16 @@ export default function ProposalsPage() {
                 ))}
               </select>
             </label>
+            <div className="field" style={{ justifyContent: 'end' }}>
+              <span>&nbsp;</span>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setShowNewCustomer((v) => !v)}
+              >
+                {showNewCustomer ? t.proposals.cancel : t.proposals.addCustomer}
+              </button>
+            </div>
             <label className="field">
               <span>{t.fleet.branch}</span>
               <select
@@ -376,7 +461,90 @@ export default function ProposalsPage() {
             </label>
           </div>
 
+          {showNewCustomer ? (
+            <section className="inline-create">
+              <h3>{t.proposals.addCustomer}</h3>
+              <div className="form-grid">
+                <label className="field">
+                  <span>{t.proposals.customerName}</span>
+                  <input
+                    value={newCustomer.legalName}
+                    onChange={(e) =>
+                      setNewCustomer({ ...newCustomer, legalName: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>{t.proposals.tradeName}</span>
+                  <input
+                    value={newCustomer.tradeName}
+                    onChange={(e) =>
+                      setNewCustomer({ ...newCustomer, tradeName: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>{t.proposals.document}</span>
+                  <input
+                    value={newCustomer.document}
+                    onChange={(e) =>
+                      setNewCustomer({
+                        ...newCustomer,
+                        document: formatCpfOrCnpj(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>{t.proposals.contactName}</span>
+                  <input
+                    value={newCustomer.contactName}
+                    onChange={(e) =>
+                      setNewCustomer({
+                        ...newCustomer,
+                        contactName: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>{t.email}</span>
+                  <input
+                    type="email"
+                    value={newCustomer.email}
+                    onChange={(e) =>
+                      setNewCustomer({ ...newCustomer, email: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>{t.proposals.phoneWhatsapp}</span>
+                  <input
+                    value={newCustomer.phone}
+                    onChange={(e) =>
+                      setNewCustomer({
+                        ...newCustomer,
+                        phone: formatPhoneBr(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={busy === 'customer'}
+                  onClick={createCustomer}
+                >
+                  {t.proposals.createCustomer}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           <h3 style={{ marginTop: '1.25rem' }}>{t.proposals.fleetPicker}</h3>
+          <p className="muted">{t.proposals.onRentHint}</p>
           <div className="fleet-toolbar">
             <label className="field" style={{ margin: 0, flex: 1 }}>
               <span>{t.proposals.searchFleet}</span>
@@ -385,6 +553,20 @@ export default function ProposalsPage() {
                 onChange={(e) => setFleetSearch(e.target.value)}
                 placeholder="EQ-… / XCMG / Hangcha"
               />
+            </label>
+            <label className="field" style={{ margin: 0, minWidth: 180 }}>
+              <span>{t.proposals.filterBranch}</span>
+              <select
+                value={fleetBranchId}
+                onChange={(e) => setFleetBranchId(e.target.value)}
+              >
+                <option value="">{t.proposals.allBranches}</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.code} · {b.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="check-toggle">
               <input
@@ -395,6 +577,9 @@ export default function ProposalsPage() {
               <span>{t.proposals.onlyAvailable}</span>
             </label>
           </div>
+          {!onlyAvailable ? (
+            <p className="muted">{t.proposals.includeOnRent}</p>
+          ) : null}
 
           <div className="fleet-picker-row">
             <select
@@ -410,6 +595,7 @@ export default function ProposalsPage() {
                     {eq.code} · {eq.brand} {eq.model} ·{' '}
                     {t.status[eq.status as keyof typeof t.status] ?? eq.status}
                     {eq.branch ? ` · ${eq.branch.code}` : ''}
+                    {eq.status !== 'AVAILABLE' ? ' ⚠' : ''}
                   </option>
                 ))
               )}
@@ -426,12 +612,23 @@ export default function ProposalsPage() {
 
           <h4>{t.proposals.selectedMachines}</h4>
           {selectedMachines.length === 0 ? (
-            <p className="muted">{t.proposals.noAvailable}</p>
+            <p className="muted">{t.proposals.selectMachineHint}</p>
           ) : (
             <ul className="machine-chips">
               {selectedMachines.map((m) => (
                 <li key={m.id}>
                   <strong>{m.code}</strong> {m.brand} {m.model}
+                  {m.branch ? (
+                    <span className="muted"> · {m.branch.code}</span>
+                  ) : null}
+                  {m.status !== 'AVAILABLE' ? (
+                    <span className="badge warn">
+                      {m.status === 'ON_RENT'
+                        ? t.proposals.onRentWarning
+                        : t.status[m.status as keyof typeof t.status] ??
+                          m.status}
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     className="chip-x"
