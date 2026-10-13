@@ -1,23 +1,128 @@
+/**
+ * Production-oriented seed:
+ * - Org + branches + admin user
+ * - Real fleet/customers/contracts from fleet-seed-raw.tsv
+ * Does NOT load the old dummy Caterpillar/Bobcat demo fleet.
+ */
 import {
   BillingPeriod,
   ContractStatus,
   EquipmentStatus,
-  FiscalDocStatus,
-  FiscalDocType,
-  InvoiceStatus,
-  MobilizationStatus,
-  MobilizationType,
-  PaymentMethod,
   PrismaClient,
-  ProposalStatus,
   Role,
-  WorkOrderStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const prisma = new PrismaClient();
 
-async function main() {
+type FleetRow = {
+  brand: string;
+  model: string;
+  serial: string;
+  year: string;
+  customer_name: string;
+  customer_cnpj: string;
+  date_a: string;
+  date_b: string;
+  term: string;
+  end_date: string;
+  monthly_rate_brl: string;
+  field_12: string;
+  field_25: string;
+  hour_limit: string;
+};
+
+function findTsvPath(): string {
+  const candidates = [
+    path.resolve(__dirname, 'data/fleet-seed-raw.tsv'),
+    path.resolve(__dirname, '../../../prisma/data/fleet-seed-raw.tsv'),
+    '/cursor/stores/self/internal/fleet-seed-raw.tsv',
+    '/cursor/stores/bc-01a11afc-ee81-70a3-851f-0de627ce71b1/internal/fleet-seed-raw.tsv',
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  throw new Error(`fleet-seed-raw.tsv not found. Tried:\n${candidates.join('\n')}`);
+}
+
+function parseTsv(filePath: string): FleetRow[] {
+  const text = fs.readFileSync(filePath, 'utf8').trim();
+  const lines = text.split(/\r?\n/);
+  const headers = lines[0].split('\t');
+  return lines.slice(1).filter(Boolean).map((line) => {
+    const cols = line.split('\t');
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => {
+      row[h] = (cols[i] ?? '').trim();
+    });
+    return row as FleetRow;
+  });
+}
+
+/** Parse dates like 2026.04.06 or 2026-04-06 */
+function parseDate(raw: string): Date | null {
+  if (!raw) return null;
+  const normalized = raw.replace(/\./g, '-');
+  const d = new Date(`${normalized}T12:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function parseYear(raw: string): number | null {
+  if (!raw) return null;
+  const m = raw.match(/^(\d{4})/);
+  return m ? Number(m[1]) : null;
+}
+
+function stableCode(brand: string, model: string, serial: string, index: number): string {
+  if (serial) {
+    const clean = serial.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    return `${brand.slice(0, 4).toUpperCase()}-${clean}`.slice(0, 40);
+  }
+  const slug = `${brand}-${model}`
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `${slug}-${String(index + 1).padStart(3, '0')}`.slice(0, 40);
+}
+
+function categoryFor(brand: string, model: string): { code: string; name: string; nameEn: string } {
+  const m = model.toUpperCase();
+  if (brand.toUpperCase() === 'HANGCHA' || m.startsWith('CPCD')) {
+    return { code: 'FORK', name: 'Empilhadeira', nameEn: 'Forklift' };
+  }
+  if (m.startsWith('SR')) {
+    return { code: 'ROLLER', name: 'Rolo compactador', nameEn: 'Compactor roller' };
+  }
+  return { code: 'LDR', name: 'Pá carregadeira', nameEn: 'Wheel loader' };
+}
+
+function buildNotes(row: FleetRow): string {
+  const parts: string[] = [
+    `term=${row.term || '24 months'}`,
+    `billing=MONTHLY (monthly_rate_brl=${row.monthly_rate_brl})`,
+  ];
+  if (row.hour_limit) {
+    parts.push(
+      row.hour_limit.toLowerCase() === 'unlimited'
+        ? 'hour_limit=Unlimited'
+        : `hour_limit=${row.hour_limit}h/period (stored in notes; no dedicated schema field)`,
+    );
+  }
+  // field_12 / field_25: no dedicated columns — keep explicitly
+  if (row.field_12) {
+    parts.push(`field_12=${row.field_12} (assumed payment day of month)`);
+  }
+  if (row.field_25) {
+    parts.push(`field_25=${row.field_25} (source column; meaning unclear — retained)`);
+  }
+  if (row.date_a) parts.push(`date_a=${row.date_a}`);
+  if (row.date_b) parts.push(`date_b=${row.date_b} (used as rental start when present)`);
+  return parts.join(' | ');
+}
+
+async function wipeBusinessData() {
   await prisma.payment.deleteMany();
   await prisma.fiscalDocument.deleteMany();
   await prisma.invoiceLine.deleteMany();
@@ -39,20 +144,25 @@ async function main() {
   await prisma.customerContact.deleteMany();
   await prisma.customerSite.deleteMany();
   await prisma.customer.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.branch.deleteMany();
-  await prisma.organization.deleteMany();
+}
 
-  const org = await prisma.organization.create({
-    data: {
-      name: 'Equipa Locações Industriais Ltda',
-      tradeName: 'Equipa',
-      cnpj: '12.345.678/0001-90',
-    },
+async function ensureOrgStructure() {
+  let org = await prisma.organization.findFirst({ where: { cnpj: '12.345.678/0001-90' } });
+  if (!org) {
+    org = await prisma.organization.create({
+      data: {
+        name: 'Equipa Locações Industriais Ltda',
+        tradeName: 'Equipa',
+        cnpj: '12.345.678/0001-90',
+      },
+    });
+  }
+
+  let branch = await prisma.branch.findFirst({
+    where: { organizationId: org.id, code: 'SP-01' },
   });
-
-  const [sp, rj, mg] = await Promise.all([
-    prisma.branch.create({
+  if (!branch) {
+    branch = await prisma.branch.create({
       data: {
         organizationId: org.id,
         code: 'SP-01',
@@ -60,8 +170,15 @@ async function main() {
         city: 'Guarulhos',
         state: 'SP',
       },
-    }),
-    prisma.branch.create({
+    });
+  }
+
+  // Keep a second branch for multi-branch UX, but no dummy fleet on it
+  const rj = await prisma.branch.findFirst({
+    where: { organizationId: org.id, code: 'RJ-01' },
+  });
+  if (!rj) {
+    await prisma.branch.create({
       data: {
         organizationId: org.id,
         code: 'RJ-01',
@@ -69,355 +186,194 @@ async function main() {
         city: 'Duque de Caxias',
         state: 'RJ',
       },
-    }),
-    prisma.branch.create({
-      data: {
-        organizationId: org.id,
-        code: 'MG-01',
-        name: 'Pátio Contagem',
-        city: 'Contagem',
-        state: 'MG',
-      },
-    }),
-  ]);
+    });
+  }
 
   const passwordHash = await bcrypt.hash('admin123', 10);
-  await prisma.user.create({
-    data: {
-      organizationId: org.id,
-      email: 'admin@equipa.com.br',
-      passwordHash,
-      name: 'Ana Admin',
-      role: Role.ADMIN,
-    },
-  });
-
-  const categories = await Promise.all(
-    [
-      { code: 'EXC', name: 'Escavadeira', nameEn: 'Excavator' },
-      { code: 'LDR', name: 'Pá carregadeira', nameEn: 'Wheel loader' },
-      { code: 'AER', name: 'Plataforma aérea', nameEn: 'Aerial platform' },
-      { code: 'SKD', name: 'Mini carregadeira', nameEn: 'Skid steer' },
-      { code: 'BRT', name: 'Britador móvel', nameEn: 'Mobile crusher' },
-      { code: 'RET', name: 'Retroescavadeira', nameEn: 'Backhoe' },
-    ].map((c) => prisma.equipmentCategory.create({ data: c })),
-  );
-
-  const byCode = Object.fromEntries(categories.map((c) => [c.code, c]));
-
-  for (const cat of categories) {
-    await prisma.rateCard.create({
+  const admin = await prisma.user.findUnique({ where: { email: 'admin@equipa.com.br' } });
+  if (!admin) {
+    await prisma.user.create({
       data: {
-        categoryId: cat.id,
-        name: `Tabela ${cat.name}`,
-        weeklyRate: 8500,
-        monthlyRate: 28000,
-        yearlyRate: 280000,
+        organizationId: org.id,
+        email: 'admin@equipa.com.br',
+        passwordHash,
+        name: 'Ana Admin',
+        role: Role.ADMIN,
       },
+    });
+  } else {
+    await prisma.user.update({
+      where: { id: admin.id },
+      data: { passwordHash, role: Role.ADMIN, active: true, organizationId: org.id },
     });
   }
 
-  const machines = [
-    { code: 'EXC-210-01', category: 'EXC', branch: sp, brand: 'Caterpillar', model: '320 GC', year: 2021, hours: 4120, status: EquipmentStatus.AVAILABLE },
-    { code: 'EXC-320-02', category: 'EXC', branch: sp, brand: 'Caterpillar', model: '320 GC', year: 2022, hours: 2890, status: EquipmentStatus.ON_RENT },
-    { code: 'LDR-966-01', category: 'LDR', branch: sp, brand: 'Caterpillar', model: '966M', year: 2020, hours: 6100, status: EquipmentStatus.AVAILABLE },
-    { code: 'AER-26-01', category: 'AER', branch: sp, brand: 'JLG', model: '600AJ', year: 2023, hours: 980, status: EquipmentStatus.IN_TRANSIT },
-    { code: 'SKD-262-01', category: 'SKD', branch: sp, brand: 'Bobcat', model: 'S770', year: 2022, hours: 1540, status: EquipmentStatus.RESERVED },
-    { code: 'BRT-QJ341', category: 'BRT', branch: rj, brand: 'Sandvik', model: 'QJ341', year: 2019, hours: 8200, status: EquipmentStatus.AVAILABLE },
-    { code: 'RET-416-01', category: 'RET', branch: rj, brand: 'Caterpillar', model: '416F2', year: 2021, hours: 3300, status: EquipmentStatus.AVAILABLE },
-    { code: 'EXC-140-01', category: 'EXC', branch: mg, brand: 'Volvo', model: 'EC140E', year: 2022, hours: 2100, status: EquipmentStatus.AVAILABLE },
-    { code: 'LDR-950-01', category: 'LDR', branch: mg, brand: 'Komatsu', model: 'WA380', year: 2020, hours: 5400, status: EquipmentStatus.MAINTENANCE },
-    { code: 'AER-18-01', category: 'AER', branch: mg, brand: 'Genie', model: 'S-85', year: 2021, hours: 1760, status: EquipmentStatus.AVAILABLE },
-  ] as const;
+  // Remove non-admin demo users if any remain
+  await prisma.user.deleteMany({
+    where: {
+      email: { not: 'admin@equipa.com.br' },
+    },
+  });
 
-  const equipmentRows = [];
-  for (const m of machines) {
-    const eq = await prisma.equipment.create({
-      data: {
-        code: m.code,
-        categoryId: byCode[m.category].id,
-        branchId: m.branch.id,
-        brand: m.brand,
-        model: m.model,
-        year: m.year,
-        serialNumber: `${m.code}-SN`,
-        hourMeter: m.hours,
-        status: m.status,
-      },
+  return { org, branch };
+}
+
+async function main() {
+  const tsvPath = findTsvPath();
+  const rows = parseTsv(tsvPath);
+  console.log(`Loading ${rows.length} fleet rows from ${tsvPath}`);
+
+  await wipeBusinessData();
+  // Also clear extra branches beyond the ones we want? Keep org users wiped of demo roles above.
+  const { branch } = await ensureOrgStructure();
+
+  // Remove orphan branches from old seed (MG-01 etc.) after equipment wiped
+  await prisma.branch.deleteMany({
+    where: { code: { notIn: ['SP-01', 'RJ-01'] } },
+  });
+
+  const categoryCache = new Map<string, string>();
+  async function getCategoryId(brand: string, model: string) {
+    const meta = categoryFor(brand, model);
+    if (categoryCache.has(meta.code)) return categoryCache.get(meta.code)!;
+    const cat = await prisma.equipmentCategory.upsert({
+      where: { code: meta.code },
+      create: meta,
+      update: { name: meta.name, nameEn: meta.nameEn },
     });
-    equipmentRows.push(eq);
-    await prisma.meterReading.create({
-      data: { equipmentId: eq.id, hours: m.hours, source: 'seed' },
-    });
+    categoryCache.set(meta.code, cat.id);
+    return cat.id;
   }
 
-  const eqByCode = Object.fromEntries(equipmentRows.map((e) => [e.code, e]));
-
-  const customer = await prisma.customer.create({
-    data: {
-      legalName: 'Construtora Horizonte Amazônia S.A.',
-      tradeName: 'Horizonte Amazônia',
-      document: '45.678.901/0001-23',
-      email: 'compras@horizonteamazonia.com.br',
-      phone: '+55 11 4002-8922',
-      city: 'São Paulo',
-      state: 'SP',
-      contacts: {
-        create: {
-          name: 'Carlos Mendes',
-          email: 'carlos.mendes@horizonteamazonia.com.br',
-          phone: '+55 11 98888-1000',
-          role: 'Compras',
-        },
+  const customerCache = new Map<string, string>();
+  async function getCustomerId(name: string, cnpj: string) {
+    if (customerCache.has(cnpj)) return customerCache.get(cnpj)!;
+    const existing = await prisma.customer.findUnique({ where: { document: cnpj } });
+    if (existing) {
+      const updated = await prisma.customer.update({
+        where: { id: existing.id },
+        data: { legalName: name, tradeName: name, documentType: 'CNPJ' },
+      });
+      customerCache.set(cnpj, updated.id);
+      return updated.id;
+    }
+    const created = await prisma.customer.create({
+      data: {
+        legalName: name,
+        tradeName: name,
+        document: cnpj,
+        documentType: 'CNPJ',
       },
-      sites: {
-        create: {
-          name: 'Obra Guarulhos Norte',
-          address: 'Av. Marginal Tietê, 4500',
-          city: 'Guarulhos',
-          state: 'SP',
-        },
+    });
+    customerCache.set(cnpj, created.id);
+    return created.id;
+  }
+
+  let equipmentCount = 0;
+  let contractCount = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const categoryId = await getCategoryId(row.brand, row.model);
+    const customerId = await getCustomerId(row.customer_name, row.customer_cnpj);
+    const code = stableCode(row.brand, row.model, row.serial, i);
+    const year = parseYear(row.year);
+    const start =
+      parseDate(row.date_b) ?? parseDate(row.date_a) ?? new Date('2026-01-01T12:00:00.000Z');
+    const end = parseDate(row.end_date) ?? new Date(start.getTime() + 24 * 30 * 86400000);
+    const monthlyRate = Number(row.monthly_rate_brl.replace(',', '')) || 0;
+    const notes = buildNotes(row);
+
+    const equipment = await prisma.equipment.upsert({
+      where: { code },
+      create: {
+        code,
+        categoryId,
+        branchId: branch.id,
+        brand: row.brand,
+        model: row.model,
+        year: year ?? undefined,
+        serialNumber: row.serial || null,
+        status: EquipmentStatus.ON_RENT,
+        hourMeter: 0,
       },
-    },
-  });
-
-  const customer2 = await prisma.customer.create({
-    data: {
-      legalName: 'Mineração Vale Verde Ltda',
-      tradeName: 'Vale Verde',
-      document: '98.765.432/0001-10',
-      email: 'ops@valeverde.com.br',
-      city: 'Contagem',
-      state: 'MG',
-    },
-  });
-
-  const proposal = await prisma.proposal.create({
-    data: {
-      number: 'PROP-2026-0001',
-      customerId: customer.id,
-      branchId: sp.id,
-      status: ProposalStatus.ACCEPTED,
-      validUntil: new Date('2026-02-01'),
-      notes: 'Locação escavadeira 320 para obra Guarulhos',
-      lines: {
-        create: {
-          equipmentId: eqByCode['EXC-320-02'].id,
-          description: 'EXC-320-02 — Caterpillar 320 GC',
-          billingPeriod: BillingPeriod.YEARLY,
-          unitRate: 245000,
-          mobFee: 8500,
-          demobFee: 8500,
-        },
+      update: {
+        categoryId,
+        branchId: branch.id,
+        brand: row.brand,
+        model: row.model,
+        year: year ?? undefined,
+        serialNumber: row.serial || null,
+        status: EquipmentStatus.ON_RENT,
       },
-    },
-  });
+    });
+    equipmentCount += 1;
 
-  await prisma.proposal.create({
-    data: {
-      number: 'PROP-2026-0002',
-      customerId: customer2.id,
-      branchId: mg.id,
-      status: ProposalStatus.SENT,
-      validUntil: new Date('2026-11-01'),
-      lines: {
-        create: {
-          equipmentId: eqByCode['EXC-140-01'].id,
-          description: 'EXC-140-01 — Volvo EC140E',
-          billingPeriod: BillingPeriod.MONTHLY,
-          unitRate: 28000,
-          mobFee: 4500,
-          demobFee: 4500,
-        },
-      },
-    },
-  });
+    const contractNumber = `CTR-REAL-${String(i + 1).padStart(3, '0')}`;
+    // Idempotent: delete prior contract with same number, then recreate
+    const prior = await prisma.contract.findUnique({ where: { number: contractNumber } });
+    if (prior) {
+      await prisma.calendarBlock.deleteMany({ where: { contractId: prior.id } });
+      await prisma.contractLine.deleteMany({ where: { contractId: prior.id } });
+      await prisma.contract.delete({ where: { id: prior.id } });
+    }
 
-  const contract = await prisma.contract.create({
-    data: {
-      number: 'CTR-2026-0001',
-      customerId: customer.id,
-      branchId: sp.id,
-      proposalId: proposal.id,
-      status: ContractStatus.ACTIVE,
-      billingPeriod: BillingPeriod.MONTHLY,
-      startDate: new Date('2026-01-15'),
-      endDate: new Date('2027-04-15'),
-      depositAmount: 50000,
-      notes: 'Contrato ativo após renovação com mudança de período',
-      lines: {
-        create: {
-          equipmentId: eqByCode['EXC-320-02'].id,
-          description: 'EXC-320-02 — Caterpillar 320 GC',
-          billingPeriod: BillingPeriod.MONTHLY,
-          unitRate: 28000,
-          mobFee: 8500,
-          demobFee: 8500,
-        },
-      },
-      amendments: {
-        create: {
-          type: 'renewal_period_change',
-          notes: 'renewal_period_change: YEARLY → MONTHLY',
-          fromPeriod: BillingPeriod.YEARLY,
-          toPeriod: BillingPeriod.MONTHLY,
-        },
-      },
-    },
-  });
+    const hourNote =
+      row.hour_limit.toLowerCase() === 'unlimited'
+        ? 'Horas: ilimitado'
+        : row.hour_limit
+          ? `Horas: limite ${row.hour_limit}/período`
+          : '';
 
-  await prisma.calendarBlock.create({
-    data: {
-      equipmentId: eqByCode['EXC-320-02'].id,
-      branchId: sp.id,
-      contractId: contract.id,
-      startDate: new Date('2026-01-15'),
-      endDate: new Date('2027-04-15'),
-      reason: 'Contrato CTR-2026-0001',
-    },
-  });
-
-  await prisma.calendarBlock.create({
-    data: {
-      equipmentId: eqByCode['SKD-262-01'].id,
-      branchId: sp.id,
-      startDate: new Date('2026-10-10'),
-      endDate: new Date('2026-10-25'),
-      reason: 'Reserva comercial',
-    },
-  });
-
-  await prisma.mobilizationOrder.create({
-    data: {
-      contractId: contract.id,
-      equipmentId: eqByCode['EXC-320-02'].id,
-      branchId: sp.id,
-      type: MobilizationType.TO_SITE,
-      status: MobilizationStatus.COMPLETED,
-      scheduledAt: new Date('2026-01-14'),
-      completedAt: new Date('2026-01-15'),
-      carrier: 'Transpesados SP',
-      cost: 8500,
-      siteAddress: 'Obra Guarulhos Norte',
-    },
-  });
-
-  await prisma.mobilizationOrder.create({
-    data: {
-      contractId: contract.id,
-      equipmentId: eqByCode['AER-26-01'].id,
-      branchId: sp.id,
-      type: MobilizationType.TO_SITE,
-      status: MobilizationStatus.IN_PROGRESS,
-      scheduledAt: new Date('2026-10-12'),
-      carrier: 'Iça Fácil',
-      cost: 3200,
-      siteAddress: 'Obra Guarulhos Norte',
-    },
-  });
-
-  const invoice = await prisma.invoice.create({
-    data: {
-      number: 'FAT-2026-0001',
-      customerId: customer.id,
-      contractId: contract.id,
-      status: InvoiceStatus.PARTIALLY_PAID,
-      issueDate: new Date('2026-02-01'),
-      dueDate: new Date('2026-03-03'),
-      totalAmount: 245000,
-      notes: 'Fatura anual convertida + períodos mensais',
-      lines: {
-        create: [
-          {
-            description: 'Locação anual EXC-320-02 (período inicial)',
-            quantity: 1,
-            unitAmount: 245000,
-            totalAmount: 245000,
+    const contract = await prisma.contract.create({
+      data: {
+        number: contractNumber,
+        customerId,
+        branchId: branch.id,
+        status: ContractStatus.ACTIVE,
+        billingPeriod: BillingPeriod.MONTHLY,
+        startDate: start,
+        endDate: end,
+        depositAmount: 0,
+        notes,
+        lines: {
+          create: {
+            equipmentId: equipment.id,
+            description: `${row.brand} ${row.model}${row.serial ? ` · SN ${row.serial}` : ` · code ${code}`}${hourNote ? ` · ${hourNote}` : ''}`,
+            billingPeriod: BillingPeriod.MONTHLY,
+            unitRate: monthlyRate,
+            mobFee: 0,
+            demobFee: 0,
           },
-        ],
-      },
-      payments: {
-        create: [
-          {
-            method: PaymentMethod.PIX,
-            amount: 100000,
-            paidAt: new Date('2026-02-05'),
-            externalRef: 'E2EPIXHORIZONTE001',
+        },
+        calendarBlocks: {
+          create: {
+            equipmentId: equipment.id,
+            branchId: branch.id,
+            startDate: start,
+            endDate: end,
+            reason: 'CONTRACT',
           },
-          {
-            method: PaymentMethod.BOLETO,
-            amount: 50000,
-            paidAt: new Date('2026-10-08'),
-            externalRef: 'BOL-FAT-2026-0001-02',
-          },
-        ],
-      },
-      fiscalDocs: {
-        create: {
-          type: FiscalDocType.NFS_E,
-          status: FiscalDocStatus.AUTHORIZED,
-          provider: 'mock',
-          providerRef: `MOCK-NFSE-FAT-2026-0001-${Date.now()}`,
-          accessKey: 'NFS-E-MOCK-KEY-FAT-2026-0001',
-          authorizedAt: new Date(),
-          payloadJson: JSON.stringify({ mock: true, invoice: 'FAT-2026-0001' }),
         },
       },
-    },
-  });
+    });
+    contractCount += 1;
+    console.log(`  ${contract.number}: ${equipment.code} → ${row.customer_name} @ R$ ${monthlyRate}`);
+  }
 
-  await prisma.invoice.create({
-    data: {
-      number: 'FAT-2026-0002',
-      customerId: customer.id,
-      contractId: contract.id,
-      status: InvoiceStatus.ISSUED,
-      issueDate: new Date('2026-10-01'),
-      dueDate: new Date('2026-10-31'),
-      totalAmount: 28000,
-      lines: {
-        create: {
-          description: 'Locação mensal EXC-320-02 — out/2026',
-          quantity: 1,
-          unitAmount: 28000,
-          totalAmount: 28000,
-        },
-      },
-    },
+  const customers = await prisma.customer.count();
+  console.log('\nSeed complete (real fleet only)');
+  console.log({
+    customers,
+    equipment: equipmentCount,
+    contracts: contractCount,
+    admin: 'admin@equipa.com.br / admin123',
   });
-
-  const plan = await prisma.maintenancePlan.create({
-    data: {
-      name: 'Revisão 250h — Pá carregadeira',
-      equipmentCode: 'LDR-950-01',
-      everyHours: 250,
-      everyDays: 90,
-    },
-  });
-
-  await prisma.workOrder.create({
-    data: {
-      planId: plan.id,
-      equipmentId: eqByCode['LDR-950-01'].id,
-      title: 'Troca de filtros e revisão hidráulica',
-      status: WorkOrderStatus.OPEN,
-      dueAt: new Date('2026-10-15'),
-      notes: 'Máquina em pátio Contagem',
-    },
-  });
-
-  await prisma.workOrder.create({
-    data: {
-      equipmentId: eqByCode['BRT-QJ341'].id,
-      title: 'Inspeção preventiva britador',
-      status: WorkOrderStatus.SCHEDULED,
-      dueAt: new Date('2026-10-20'),
-    },
-  });
-
-  console.log('Seed OK');
-  console.log('Login: admin@equipa.com.br / admin123');
-  console.log(`Invoice sample: ${invoice.number}`);
+  console.log('Mapping notes:');
+  console.log('- monthly_rate_brl → ContractLine.unitRate with billingPeriod=MONTHLY');
+  console.log('- start = date_b ?? date_a; end = end_date');
+  console.log('- hour_limit / field_12 / field_25 → Contract.notes (+ hour note on line description)');
+  console.log('- field_12 assumed payment day; field_25 retained with unknown meaning');
 }
 
 main()
