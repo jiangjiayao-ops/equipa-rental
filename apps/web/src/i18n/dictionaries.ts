@@ -92,9 +92,17 @@ export const dictionaries = {
       notifyNotConfigured: 'Canal não configurado — mensagem no outbox (dev).',
       notifySent: 'Enviado pelo provedor',
       demoHint:
-        'Demo: use clientes SUA GRANEIS ou TECMONTA e um equipamento da frota.',
+        'Demo: use clientes SUA GRANEIS ou TECMONTA e máquinas da frota (filtro “somente disponíveis”).',
       cancel: 'Cancelar',
       close: 'Fechar',
+      searchFleet: 'Buscar na frota',
+      onlyAvailable: 'Somente disponíveis',
+      noAvailable: 'Nenhuma máquina disponível com o filtro atual.',
+      selectedMachines: 'Máquinas selecionadas',
+      addMachine: 'Incluir máquina',
+      periodPackage: 'Pacote de período',
+      downloadPdf: 'Baixar PDF',
+      fleetPicker: 'Selecionar máquina da frota',
     },
     publicProposal: {
       title: 'Proposta comercial',
@@ -107,6 +115,7 @@ export const dictionaries = {
       loading: 'Carregando proposta…',
       equipment: 'Equipamentos',
       days: 'dias',
+      packageRate: 'Taxa do período',
     },
     contracts: {
       title: 'Contratos',
@@ -305,9 +314,17 @@ export const dictionaries = {
       notifyNotConfigured: 'Channel not configured — message in dev outbox.',
       notifySent: 'Sent via provider',
       demoHint:
-        'Demo: use customers SUA GRANEIS or TECMONTA and a fleet equipment unit.',
+        'Demo: use customers SUA GRANEIS or TECMONTA and fleet machines (“available only” filter).',
       cancel: 'Cancel',
       close: 'Close',
+      searchFleet: 'Search fleet',
+      onlyAvailable: 'Available only',
+      noAvailable: 'No machines match the current filter.',
+      selectedMachines: 'Selected machines',
+      addMachine: 'Add machine',
+      periodPackage: 'Period package',
+      downloadPdf: 'Download PDF',
+      fleetPicker: 'Pick machine from fleet',
     },
     publicProposal: {
       title: 'Commercial proposal',
@@ -320,6 +337,7 @@ export const dictionaries = {
       loading: 'Loading proposal…',
       equipment: 'Equipment',
       days: 'days',
+      packageRate: 'Period rate',
     },
     contracts: {
       title: 'Contracts',

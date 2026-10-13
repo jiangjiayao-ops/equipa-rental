@@ -64,6 +64,25 @@ export async function publicApi<T>(path: string, init: RequestInit = {}): Promis
   return res.json() as Promise<T>;
 }
 
+/** Download a binary API response (e.g. proposal PDF). */
+export async function downloadApiFile(path: string, filename: string) {
+  const token = getToken();
+  const headers = new Headers();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const res = await fetch(`${API_URL}${path}`, { headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function formatBrl(value: number) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',

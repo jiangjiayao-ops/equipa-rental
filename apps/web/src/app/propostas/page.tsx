@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { api, formatBrl } from '@/lib/api';
+import { api, downloadApiFile, formatBrl } from '@/lib/api';
 
 type BillingTiming = 'ADVANCE' | 'ARREARS';
 type BillingPeriod = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
@@ -51,9 +51,17 @@ type Proposal = {
   acceptedOption?: Option | null;
 };
 
-type Customer = { id: string; legalName: string; email?: string | null; phone?: string | null };
+type Customer = { id: string; legalName: string };
 type Branch = { id: string; code: string; name: string };
-type Equipment = { id: string; code: string; brand: string; model: string; status: string };
+type Equipment = {
+  id: string;
+  code: string;
+  brand: string;
+  model: string;
+  status: string;
+  branch?: { code: string };
+  category?: { name: string };
+};
 
 function apiError(err: unknown, fallback: string) {
   if (!(err instanceof Error)) return fallback;
@@ -87,7 +95,7 @@ const defaultOptions = (): Option[] => [
 ];
 
 export default function ProposalsPage() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [rows, setRows] = useState<Proposal[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -103,15 +111,30 @@ export default function ProposalsPage() {
     whatsapp: string;
   } | null>(null);
 
+  const [onlyAvailable, setOnlyAvailable] = useState(true);
+  const [fleetSearch, setFleetSearch] = useState('');
+  const [pickedId, setPickedId] = useState('');
+  const [selectedMachines, setSelectedMachines] = useState<Equipment[]>([]);
+
   const [form, setForm] = useState({
     customerId: '',
     branchId: '',
-    equipmentId: '',
     billingTiming: 'ADVANCE' as BillingTiming,
     validUntil: '',
     notes: '',
     options: defaultOptions(),
   });
+
+  const filteredFleet = useMemo(() => {
+    const q = fleetSearch.trim().toLowerCase();
+    return equipment.filter((eq) => {
+      if (onlyAvailable && eq.status !== 'AVAILABLE') return false;
+      if (selectedMachines.some((m) => m.id === eq.id)) return false;
+      if (!q) return true;
+      const hay = `${eq.code} ${eq.brand} ${eq.model} ${eq.branch?.code ?? ''} ${eq.category?.name ?? ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [equipment, onlyAvailable, fleetSearch, selectedMachines]);
 
   const load = async () => {
     try {
@@ -133,8 +156,9 @@ export default function ProposalsPage() {
         ...prev,
         customerId: prev.customerId || cust[0]?.id || '',
         branchId: prev.branchId || br[0]?.id || '',
-        equipmentId: prev.equipmentId || eq[0]?.id || '',
       }));
+      const firstAvail = eq.find((e) => e.status === 'AVAILABLE');
+      setPickedId(firstAvail?.id || eq[0]?.id || '');
     } catch (err) {
       setError(apiError(err, t.error));
     }
@@ -151,16 +175,27 @@ export default function ProposalsPage() {
       const full = await api<Proposal>(`/proposals/${id}`);
       setSelected(full);
       if (full.publicToken) {
-        setPublicUrl(
-          `${window.location.origin}/p/${full.publicToken}`,
-        );
+        setPublicUrl(`${window.location.origin}/p/${full.publicToken}`);
       }
     } catch (err) {
       setError(apiError(err, t.error));
     }
   };
 
+  const addMachine = () => {
+    const eq = equipment.find((e) => e.id === pickedId) || filteredFleet[0];
+    if (!eq) return;
+    if (selectedMachines.some((m) => m.id === eq.id)) return;
+    setSelectedMachines((prev) => [...prev, eq]);
+    const next = filteredFleet.find((m) => m.id !== eq.id);
+    setPickedId(next?.id || '');
+  };
+
   const createProposal = async () => {
+    if (!selectedMachines.length) {
+      setError(t.proposals.noAvailable);
+      return;
+    }
     setBusy('create');
     setError('');
     setMessage('');
@@ -173,7 +208,7 @@ export default function ProposalsPage() {
           billingTiming: form.billingTiming,
           validUntil: form.validUntil || undefined,
           notes: form.notes || undefined,
-          lines: [{ equipmentId: form.equipmentId }],
+          lines: selectedMachines.map((m) => ({ equipmentId: m.id })),
           options: form.options.map((o, i) => ({
             label: o.label,
             billingPeriod: o.billingPeriod,
@@ -186,6 +221,7 @@ export default function ProposalsPage() {
         }),
       });
       setShowCreate(false);
+      setSelectedMachines([]);
       setMessage(`${t.proposals.create}: ${created.number}`);
       await load();
       await open(created.id);
@@ -214,11 +250,29 @@ export default function ProposalsPage() {
       setSelected(res.proposal);
       setPublicUrl(res.publicUrl);
       setNotifyConfig(res.notifyConfig);
-      const modes = (res.attempts ?? [])
-        .map((a) => `${a.channel}:${a.status}`)
-        .join(', ');
-      setMessage(`${t.proposals.send}: ${modes}`);
+      setMessage(
+        `${t.proposals.send}: ${(res.attempts ?? [])
+          .map((a) => `${a.channel}:${a.status}`)
+          .join(', ')}`,
+      );
       await load();
+    } catch (err) {
+      setError(apiError(err, t.error));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (!selected) return;
+    setBusy('pdf');
+    setError('');
+    try {
+      await downloadApiFile(
+        `/proposals/${selected.id}/pdf?locale=${locale === 'en' ? 'en' : 'pt-BR'}`,
+        `${selected.number}.pdf`,
+      );
+      setMessage(t.proposals.downloadPdf);
     } catch (err) {
       setError(apiError(err, t.error));
     } finally {
@@ -230,6 +284,12 @@ export default function ProposalsPage() {
     if (!publicUrl) return;
     await navigator.clipboard.writeText(publicUrl);
     setMessage(t.proposals.copyLink);
+  };
+
+  const updateOption = (idx: number, patch: Partial<Option>) => {
+    const options = [...form.options];
+    options[idx] = { ...options[idx], ...patch };
+    setForm({ ...form, options });
   };
 
   return (
@@ -285,19 +345,6 @@ export default function ProposalsPage() {
               </select>
             </label>
             <label className="field">
-              <span>{t.proposals.equipment}</span>
-              <select
-                value={form.equipmentId}
-                onChange={(e) => setForm({ ...form, equipmentId: e.target.value })}
-              >
-                {equipment.map((eq) => (
-                  <option key={eq.id} value={eq.id}>
-                    {eq.code} · {eq.brand} {eq.model}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
               <span>{t.proposals.billingTiming}</span>
               <select
                 value={form.billingTiming}
@@ -320,7 +367,7 @@ export default function ProposalsPage() {
                 onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
               />
             </label>
-            <label className="field">
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
               <span>{t.proposals.notes}</span>
               <input
                 value={form.notes}
@@ -329,95 +376,165 @@ export default function ProposalsPage() {
             </label>
           </div>
 
-          <h3 style={{ marginTop: '1rem' }}>{t.proposals.options}</h3>
-          {form.options.map((opt, idx) => (
-            <div className="form-grid" key={idx} style={{ marginBottom: '0.5rem' }}>
-              <label className="field">
-                <span>{t.proposals.optionLabel}</span>
-                <input
-                  value={opt.label}
-                  onChange={(e) => {
-                    const options = [...form.options];
-                    options[idx] = { ...opt, label: e.target.value };
-                    setForm({ ...form, options });
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>{t.proposals.period}</span>
-                <select
-                  value={opt.billingPeriod}
-                  onChange={(e) => {
-                    const options = [...form.options];
-                    options[idx] = {
-                      ...opt,
-                      billingPeriod: e.target.value as BillingPeriod,
-                    };
-                    setForm({ ...form, options });
-                  }}
-                >
-                  <option value="WEEKLY">{t.status.WEEKLY}</option>
-                  <option value="MONTHLY">{t.status.MONTHLY}</option>
-                  <option value="YEARLY">{t.status.YEARLY}</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>{t.proposals.durationDays}</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={opt.durationDays}
-                  onChange={(e) => {
-                    const options = [...form.options];
-                    options[idx] = {
-                      ...opt,
-                      durationDays: Number(e.target.value),
-                    };
-                    setForm({ ...form, options });
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>{t.proposals.unitRate}</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={opt.unitRate}
-                  onChange={(e) => {
-                    const options = [...form.options];
-                    options[idx] = { ...opt, unitRate: Number(e.target.value) };
-                    setForm({ ...form, options });
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>{t.proposals.mobFee}</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={opt.mobFee}
-                  onChange={(e) => {
-                    const options = [...form.options];
-                    options[idx] = { ...opt, mobFee: Number(e.target.value) };
-                    setForm({ ...form, options });
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>{t.proposals.demobFee}</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={opt.demobFee}
-                  onChange={(e) => {
-                    const options = [...form.options];
-                    options[idx] = { ...opt, demobFee: Number(e.target.value) };
-                    setForm({ ...form, options });
-                  }}
-                />
-              </label>
-            </div>
-          ))}
+          <h3 style={{ marginTop: '1.25rem' }}>{t.proposals.fleetPicker}</h3>
+          <div className="fleet-toolbar">
+            <label className="field" style={{ margin: 0, flex: 1 }}>
+              <span>{t.proposals.searchFleet}</span>
+              <input
+                value={fleetSearch}
+                onChange={(e) => setFleetSearch(e.target.value)}
+                placeholder="EQ-… / XCMG / Hangcha"
+              />
+            </label>
+            <label className="check-toggle">
+              <input
+                type="checkbox"
+                checked={onlyAvailable}
+                onChange={(e) => setOnlyAvailable(e.target.checked)}
+              />
+              <span>{t.proposals.onlyAvailable}</span>
+            </label>
+          </div>
+
+          <div className="fleet-picker-row">
+            <select
+              value={pickedId}
+              onChange={(e) => setPickedId(e.target.value)}
+              className="fleet-select"
+            >
+              {filteredFleet.length === 0 ? (
+                <option value="">{t.proposals.noAvailable}</option>
+              ) : (
+                filteredFleet.map((eq) => (
+                  <option key={eq.id} value={eq.id}>
+                    {eq.code} · {eq.brand} {eq.model} ·{' '}
+                    {t.status[eq.status as keyof typeof t.status] ?? eq.status}
+                    {eq.branch ? ` · ${eq.branch.code}` : ''}
+                  </option>
+                ))
+              )}
+            </select>
+            <button
+              type="button"
+              className="ghost"
+              disabled={!pickedId || filteredFleet.length === 0}
+              onClick={addMachine}
+            >
+              {t.proposals.addMachine}
+            </button>
+          </div>
+
+          <h4>{t.proposals.selectedMachines}</h4>
+          {selectedMachines.length === 0 ? (
+            <p className="muted">{t.proposals.noAvailable}</p>
+          ) : (
+            <ul className="machine-chips">
+              {selectedMachines.map((m) => (
+                <li key={m.id}>
+                  <strong>{m.code}</strong> {m.brand} {m.model}
+                  <button
+                    type="button"
+                    className="chip-x"
+                    onClick={() =>
+                      setSelectedMachines((prev) =>
+                        prev.filter((x) => x.id !== m.id),
+                      )
+                    }
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h3 style={{ marginTop: '1.4rem' }}>{t.proposals.options}</h3>
+          <div className="period-sections">
+            {form.options.map((opt, idx) => (
+              <section className="period-card" key={idx}>
+                <header className="period-card-head">
+                  <span className="period-badge">
+                    {t.proposals.periodPackage} {idx + 1}
+                  </span>
+                  <strong>
+                    {opt.durationDays}d ·{' '}
+                    {t.status[opt.billingPeriod as keyof typeof t.status]}
+                  </strong>
+                </header>
+                <div className="form-grid">
+                  <label className="field">
+                    <span>{t.proposals.optionLabel}</span>
+                    <input
+                      value={opt.label}
+                      onChange={(e) => updateOption(idx, { label: e.target.value })}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>{t.proposals.period}</span>
+                    <select
+                      value={opt.billingPeriod}
+                      onChange={(e) =>
+                        updateOption(idx, {
+                          billingPeriod: e.target.value as BillingPeriod,
+                        })
+                      }
+                    >
+                      <option value="WEEKLY">{t.status.WEEKLY}</option>
+                      <option value="MONTHLY">{t.status.MONTHLY}</option>
+                      <option value="YEARLY">{t.status.YEARLY}</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>{t.proposals.durationDays}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={opt.durationDays}
+                      onChange={(e) =>
+                        updateOption(idx, {
+                          durationDays: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>{t.proposals.unitRate}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={opt.unitRate}
+                      onChange={(e) =>
+                        updateOption(idx, { unitRate: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>{t.proposals.mobFee}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={opt.mobFee}
+                      onChange={(e) =>
+                        updateOption(idx, { mobFee: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>{t.proposals.demobFee}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={opt.demobFee}
+                      onChange={(e) =>
+                        updateOption(idx, { demobFee: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                </div>
+              </section>
+            ))}
+          </div>
+
           <div className="actions">
             <button
               type="button"
@@ -490,11 +607,8 @@ export default function ProposalsPage() {
             p.customer.legalName,
             p.branch.code,
             p.options?.length
-              ? p.options.map((o) => o.label).join(', ')
-              : p.lines[0]
-                ? t.status[p.lines[0].billingPeriod as keyof typeof t.status] ??
-                  p.lines[0].billingPeriod
-                : '—',
+              ? p.options.map((o) => o.label).join(' · ')
+              : '—',
             t.status[(p.billingTiming ?? 'ADVANCE') as keyof typeof t.status] ??
               p.billingTiming,
             <span className="badge" key="s">
@@ -523,24 +637,41 @@ export default function ProposalsPage() {
             {' · '}
             {t.status[selected.billingTiming as keyof typeof t.status]}
           </p>
+
+          <h3>{t.proposals.equipment}</h3>
+          <ul>
+            {selected.lines.map((l, i) => (
+              <li key={i}>{l.description}</li>
+            ))}
+          </ul>
+
+          <h3>{t.proposals.options}</h3>
+          <div className="period-sections">
+            {(selected.options ?? []).map((o, idx) => (
+              <section className="period-card" key={o.id ?? idx}>
+                <header className="period-card-head">
+                  <span className="period-badge">{o.label}</span>
+                  <strong>
+                    {o.durationDays}d ·{' '}
+                    {t.status[o.billingPeriod as keyof typeof t.status]}
+                  </strong>
+                </header>
+                <p>
+                  {formatBrl(o.unitRate)}
+                  {(o.mobFee || o.demobFee) > 0
+                    ? ` · mob ${formatBrl(o.mobFee)} / demob ${formatBrl(o.demobFee)}`
+                    : ''}
+                </p>
+              </section>
+            ))}
+          </div>
+
           <p className="muted">{t.proposals.sendHelp}</p>
           {notifyConfig ? (
             <p className="muted">
               Email: {notifyConfig.email} · WhatsApp: {notifyConfig.whatsapp}
             </p>
           ) : null}
-
-          <h3>{t.proposals.options}</h3>
-          <ul>
-            {(selected.options ?? []).map((o) => (
-              <li key={o.id ?? o.label}>
-                <strong>{o.label}</strong> — {o.durationDays}d ·{' '}
-                {t.status[o.billingPeriod as keyof typeof t.status]} ·{' '}
-                {formatBrl(o.unitRate)}
-                {o.mobFee ? ` · mob ${formatBrl(o.mobFee)}` : ''}
-              </li>
-            ))}
-          </ul>
 
           <div className="actions">
             <button
@@ -550,6 +681,14 @@ export default function ProposalsPage() {
               onClick={sendProposal}
             >
               {t.proposals.send}
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={busy === 'pdf'}
+              onClick={downloadPdf}
+            >
+              {t.proposals.downloadPdf}
             </button>
             {publicUrl ? (
               <button type="button" className="ghost" onClick={copyLink}>
@@ -581,7 +720,6 @@ export default function ProposalsPage() {
                     : a.status === 'SENT'
                       ? ` — ${t.proposals.notifySent}`
                       : ''}
-                  {a.error ? ` · ${a.error}` : ''}
                 </li>
               ))}
             </ul>

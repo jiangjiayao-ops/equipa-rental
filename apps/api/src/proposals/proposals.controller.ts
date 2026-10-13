@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import {
   BillingPeriod,
   BillingTiming,
@@ -14,7 +25,9 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ProposalPdfService } from './proposal-pdf.service';
 import { ProposalsService } from './proposals.service';
 
 class LineDto {
@@ -121,7 +134,10 @@ class ConvertDto {
 @Controller('proposals')
 @UseGuards(JwtAuthGuard)
 export class ProposalsController {
-  constructor(private readonly proposals: ProposalsService) {}
+  constructor(
+    private readonly proposals: ProposalsService,
+    private readonly pdf: ProposalPdfService,
+  ) {}
 
   @Get()
   list() {
@@ -131,6 +147,25 @@ export class ProposalsController {
   @Get('notify-config')
   notifyConfig() {
     return this.proposals.notifyConfig();
+  }
+
+  @Get(':id/pdf')
+  @Header('Content-Type', 'application/pdf')
+  async pdfDownload(
+    @Param('id') id: string,
+    @Query('locale') locale: string | undefined,
+    @Res() res: Response,
+  ) {
+    const proposal = await this.proposals.get(id);
+    const buf = await this.pdf.build(
+      id,
+      locale === 'en' ? 'en' : 'pt-BR',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${proposal.number}.pdf"`,
+    );
+    res.send(buf);
   }
 
   @Get(':id')

@@ -94,7 +94,7 @@ export default function PublicProposalPage() {
 
   return (
     <div className="login-page">
-      <div className="login-card" style={{ width: 'min(640px, 100%)' }}>
+      <div className="login-card" style={{ width: 'min(720px, 100%)' }}>
         <div className="row" style={{ marginTop: 0 }}>
           <div>
             <h1 className="brand">{t.brand}</h1>
@@ -137,32 +137,40 @@ export default function PublicProposalPage() {
             </ul>
 
             <h3>{t.publicProposal.selectOption}</h3>
-            <div className="stack">
-              {proposal.options.map((o) => (
-                <label
-                  key={o.id}
-                  className="panel"
-                  style={{ cursor: 'pointer', display: 'block' }}
-                >
-                  <input
-                    type="radio"
-                    name="option"
-                    value={o.id}
-                    checked={optionId === o.id}
-                    disabled={proposal.status === 'ACCEPTED' || proposal.status === 'EXPIRED'}
-                    onChange={() => setOptionId(o.id)}
-                    style={{ marginRight: '0.6rem' }}
-                  />
-                  <strong>{o.label}</strong> — {o.durationDays}{' '}
-                  {t.publicProposal.days} ·{' '}
-                  {t.status[o.billingPeriod as keyof typeof t.status] ??
-                    o.billingPeriod}{' '}
-                  · {formatBrl(o.unitRate)}
-                  {(o.mobFee || o.demobFee) > 0
-                    ? ` · mob/demob ${formatBrl(o.mobFee)} / ${formatBrl(o.demobFee)}`
-                    : ''}
-                </label>
-              ))}
+            <div className="period-sections">
+              {proposal.options.map((o) => {
+                const active = optionId === o.id;
+                return (
+                  <button
+                    type="button"
+                    key={o.id}
+                    className={`period-card selectable${active ? ' selected' : ''}`}
+                    disabled={
+                      proposal.status === 'ACCEPTED' ||
+                      proposal.status === 'EXPIRED'
+                    }
+                    onClick={() => setOptionId(o.id)}
+                  >
+                    <header className="period-card-head">
+                      <span className="period-badge">{o.label}</span>
+                      <strong>
+                        {o.durationDays} {t.publicProposal.days} ·{' '}
+                        {t.status[o.billingPeriod as keyof typeof t.status] ??
+                          o.billingPeriod}
+                      </strong>
+                    </header>
+                    <p className="period-rate">
+                      {t.publicProposal.packageRate}:{' '}
+                      <strong>{formatBrl(o.unitRate)}</strong>
+                    </p>
+                    {(o.mobFee || o.demobFee) > 0 ? (
+                      <p className="muted">
+                        mob {formatBrl(o.mobFee)} / demob {formatBrl(o.demobFee)}
+                      </p>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
 
             {proposal.notes ? <p className="muted">{proposal.notes}</p> : null}

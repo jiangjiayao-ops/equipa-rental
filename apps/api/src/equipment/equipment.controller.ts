@@ -8,8 +8,14 @@ export class EquipmentController {
   constructor(private readonly equipment: EquipmentService) {}
 
   @Get()
-  list(@Query('branchId') branchId?: string) {
-    return this.equipment.list(branchId);
+  list(
+    @Query('branchId') branchId?: string,
+    @Query('availableOnly') availableOnly?: string,
+  ) {
+    return this.equipment.list(
+      branchId,
+      availableOnly === '1' || availableOnly === 'true',
+    );
   }
 
   @Get(':id')

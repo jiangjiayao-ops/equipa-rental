@@ -448,6 +448,26 @@ async function main() {
     console.log(`  ${contract.number}: ${equipment.code} → ${row.customer_name} @ R$ ${monthlyRate}`);
   }
 
+  // Spare AVAILABLE unit for proposal "available only" filter demos
+  const spareCat = await getCategoryId('XCMG', 'SPARE');
+  await prisma.equipment.upsert({
+    where: { code: 'EQ-DEMO-AVAIL' },
+    create: {
+      code: 'EQ-DEMO-AVAIL',
+      categoryId: spareCat,
+      branchId: branch.id,
+      brand: 'XCMG',
+      model: 'Demo Available',
+      status: EquipmentStatus.AVAILABLE,
+      hourMeter: 0,
+    },
+    update: {
+      status: EquipmentStatus.AVAILABLE,
+      branchId: branch.id,
+    },
+  });
+  equipmentCount += 1;
+
   const customers = await prisma.customer.count();
   console.log('\nSeed complete (real fleet only)');
   console.log({
@@ -455,6 +475,7 @@ async function main() {
     equipment: equipmentCount,
     contracts: contractCount,
     admin: 'admin@equipa.com.br / admin123',
+    availableDemo: 'EQ-DEMO-AVAIL',
   });
   console.log('Mapping notes:');
   console.log('- monthly_rate_brl → ContractLine.unitRate with billingPeriod=MONTHLY');
@@ -462,6 +483,7 @@ async function main() {
   console.log('- hour_limit / field_12 / field_25 → Contract.notes (+ hour note on line description)');
   console.log('- field_12 assumed payment day; field_25 retained with unknown meaning');
   console.log('- billingTiming default ADVANCE (pay in advance) on all seeded contracts');
+  console.log('- EQ-DEMO-AVAIL seeded AVAILABLE for proposal fleet filter demos');
 }
 
 main()

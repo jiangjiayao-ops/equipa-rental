@@ -454,6 +454,131 @@ th {
   width: 100%;
 }
 
+.fleet-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  align-items: end;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.check-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding-bottom: 0.55rem;
+  cursor: pointer;
+}
+
+.fleet-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.fleet-select {
+  flex: 1;
+  min-width: 220px;
+  padding: 0.65rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.machine-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.machine-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--chip-bg);
+  font-size: 0.88rem;
+}
+
+.chip-x {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.period-sections {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0.6rem 0 1rem;
+}
+
+.period-card {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(180deg, var(--panel-from), var(--panel-to));
+  box-shadow: var(--shadow);
+  text-align: left;
+  color: inherit;
+}
+
+.period-card.selectable {
+  cursor: pointer;
+  width: 100%;
+  font: inherit;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.period-card.selectable:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+
+.period-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--nav-active-border), var(--shadow);
+}
+
+.period-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.period-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--badge-warn-bg);
+  border: 1px solid var(--badge-warn-border);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.period-rate {
+  margin: 0.2rem 0;
+  font-size: 1.05rem;
+}
+
 @media (max-width: 640px) {
   .form-grid {
     grid-template-columns: 1fr;
