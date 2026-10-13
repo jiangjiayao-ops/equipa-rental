@@ -10,6 +10,9 @@ export const dictionaries = {
     signingIn: 'Entrando…',
     logout: 'Sair',
     language: 'Idioma',
+    theme: 'Tema',
+    themeLight: 'Claro',
+    themeDark: 'Escuro',
     nav: {
       today: 'Hoje',
       fleet: 'Frota',
@@ -183,6 +186,9 @@ export const dictionaries = {
     signingIn: 'Signing in…',
     logout: 'Sign out',
     language: 'Language',
+    theme: 'Theme',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     nav: {
       today: 'Today',
       fleet: 'Fleet',

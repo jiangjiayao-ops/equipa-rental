@@ -1,6 +1,20 @@
 :root {
+  --font-display: 'Segoe UI', 'Avenir Next', 'Helvetica Neue', sans-serif;
+  --font-body: 'Segoe UI', 'Avenir Next', 'Helvetica Neue', sans-serif;
+  --accent: #c4892f;
+  --accent-2: #2f7a58;
+  --danger: #c45c45;
+  --ok: #2f8a55;
+}
+
+/* Default / dark — existing Equipa forest night */
+html,
+html.theme-dark,
+html[data-theme='dark'] {
   --bg: #0f1c18;
   --bg-2: #162822;
+  --bg-deep: #0c1613;
+  --bg-mid: #12241e;
   --panel: #1c322b;
   --panel-2: #243f36;
   --line: #35574c;
@@ -11,8 +25,69 @@
   --danger: #e07a5f;
   --ok: #6fbf8a;
   --shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
-  --font-display: 'Segoe UI', 'Avenir Next', 'Helvetica Neue', sans-serif;
-  --font-body: 'Segoe UI', 'Avenir Next', 'Helvetica Neue', sans-serif;
+  --sidebar-from: rgba(28, 50, 43, 0.95);
+  --sidebar-to: rgba(15, 28, 24, 0.98);
+  --panel-from: rgba(36, 63, 54, 0.9);
+  --panel-to: rgba(28, 50, 43, 0.92);
+  --input-bg: rgba(15, 28, 24, 0.7);
+  --chip-bg: rgba(15, 28, 24, 0.55);
+  --glow-gold: rgba(212, 162, 76, 0.18);
+  --glow-green: rgba(126, 200, 163, 0.12);
+  --nav-hover: rgba(126, 200, 163, 0.08);
+  --nav-active-from: rgba(212, 162, 76, 0.22);
+  --nav-active-to: rgba(126, 200, 163, 0.1);
+  --nav-active-border: rgba(212, 162, 76, 0.35);
+  --badge-bg: rgba(126, 200, 163, 0.14);
+  --badge-border: rgba(126, 200, 163, 0.28);
+  --badge-warn-bg: rgba(212, 162, 76, 0.16);
+  --badge-warn-border: rgba(212, 162, 76, 0.35);
+  --badge-danger-bg: rgba(224, 122, 95, 0.16);
+  --badge-danger-border: rgba(224, 122, 95, 0.35);
+  --table-line: rgba(53, 87, 76, 0.7);
+  --primary-text: #1a1408;
+  --login-from: rgba(36, 63, 54, 0.96);
+  --login-to: rgba(22, 40, 34, 0.98);
+}
+
+/* Light — same forest/gold direction, daylight surfaces */
+html.theme-light,
+html[data-theme='light'] {
+  --bg: #eef5f0;
+  --bg-2: #e2ede6;
+  --bg-deep: #d7e6dc;
+  --bg-mid: #e7f0ea;
+  --panel: #ffffff;
+  --panel-2: #f4faf6;
+  --line: #b7cfc2;
+  --text: #15241e;
+  --muted: #4f6a5e;
+  --accent: #b8862e;
+  --accent-2: #2f7a58;
+  --danger: #c45c45;
+  --ok: #2f8a55;
+  --shadow: 0 14px 32px rgba(21, 36, 30, 0.08);
+  --sidebar-from: rgba(255, 255, 255, 0.96);
+  --sidebar-to: rgba(238, 245, 240, 0.98);
+  --panel-from: rgba(255, 255, 255, 0.98);
+  --panel-to: rgba(244, 250, 246, 0.98);
+  --input-bg: rgba(255, 255, 255, 0.95);
+  --chip-bg: rgba(255, 255, 255, 0.85);
+  --glow-gold: rgba(184, 134, 46, 0.14);
+  --glow-green: rgba(47, 122, 88, 0.1);
+  --nav-hover: rgba(47, 122, 88, 0.08);
+  --nav-active-from: rgba(184, 134, 46, 0.16);
+  --nav-active-to: rgba(47, 122, 88, 0.08);
+  --nav-active-border: rgba(184, 134, 46, 0.4);
+  --badge-bg: rgba(47, 122, 88, 0.1);
+  --badge-border: rgba(47, 122, 88, 0.28);
+  --badge-warn-bg: rgba(184, 134, 46, 0.14);
+  --badge-warn-border: rgba(184, 134, 46, 0.35);
+  --badge-danger-bg: rgba(196, 92, 69, 0.12);
+  --badge-danger-border: rgba(196, 92, 69, 0.35);
+  --table-line: rgba(183, 207, 194, 0.9);
+  --primary-text: #1a1408;
+  --login-from: rgba(255, 255, 255, 0.98);
+  --login-to: rgba(238, 245, 240, 0.98);
 }
 
 * {
@@ -24,9 +99,9 @@ body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(212, 162, 76, 0.18), transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, rgba(126, 200, 163, 0.12), transparent 50%),
-    linear-gradient(160deg, var(--bg), #12241e 45%, #0c1613);
+    radial-gradient(1200px 600px at 10% -10%, var(--glow-gold), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, var(--glow-green), transparent 50%),
+    linear-gradient(160deg, var(--bg), var(--bg-mid) 45%, var(--bg-deep));
   color: var(--text);
   font-family: var(--font-body);
 }
@@ -37,7 +112,8 @@ a {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -52,7 +128,7 @@ input {
   flex-direction: column;
   gap: 1.5rem;
   padding: 1.5rem 1.1rem;
-  background: linear-gradient(180deg, rgba(28, 50, 43, 0.95), rgba(15, 28, 24, 0.98));
+  background: linear-gradient(180deg, var(--sidebar-from), var(--sidebar-to));
   border-right: 1px solid var(--line);
 }
 
@@ -86,15 +162,15 @@ input {
 }
 
 .nav-link:hover {
-  background: rgba(126, 200, 163, 0.08);
+  background: var(--nav-hover);
   color: var(--text);
   transform: translateX(2px);
 }
 
 .nav-link.active {
-  background: linear-gradient(90deg, rgba(212, 162, 76, 0.22), rgba(126, 200, 163, 0.1));
+  background: linear-gradient(90deg, var(--nav-active-from), var(--nav-active-to));
   color: var(--text);
-  border: 1px solid rgba(212, 162, 76, 0.35);
+  border: 1px solid var(--nav-active-border);
 }
 
 .sidebar-foot {
@@ -127,7 +203,7 @@ input {
 
 .stat,
 .panel {
-  background: linear-gradient(180deg, rgba(36, 63, 54, 0.9), rgba(28, 50, 43, 0.92));
+  background: linear-gradient(180deg, var(--panel-from), var(--panel-to));
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 1rem 1.1rem;
@@ -176,7 +252,7 @@ th,
 td {
   text-align: left;
   padding: 0.7rem 0.55rem;
-  border-bottom: 1px solid rgba(53, 87, 76, 0.7);
+  border-bottom: 1px solid var(--table-line);
   vertical-align: top;
 }
 
@@ -192,32 +268,34 @@ th {
   display: inline-block;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  background: rgba(126, 200, 163, 0.14);
-  border: 1px solid rgba(126, 200, 163, 0.28);
+  background: var(--badge-bg);
+  border: 1px solid var(--badge-border);
   font-size: 0.78rem;
 }
 
 .badge.warn {
-  background: rgba(212, 162, 76, 0.16);
-  border-color: rgba(212, 162, 76, 0.35);
+  background: var(--badge-warn-bg);
+  border-color: var(--badge-warn-border);
 }
 
 .badge.danger {
-  background: rgba(224, 122, 95, 0.16);
-  border-color: rgba(224, 122, 95, 0.35);
+  background: var(--badge-danger-bg);
+  border-color: var(--badge-danger-border);
 }
 
-.lang-switch {
+.lang-switch,
+.theme-switch {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   padding: 0.35rem 0.55rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(15, 28, 24, 0.55);
+  background: var(--chip-bg);
 }
 
-.lang-switch button {
+.lang-switch button,
+.theme-switch button {
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -226,11 +304,13 @@ th {
   font-weight: 650;
 }
 
-.lang-switch button.active {
+.lang-switch button.active,
+.theme-switch button.active {
   color: var(--accent);
 }
 
-.lang-switch .sep {
+.lang-switch .sep,
+.theme-switch .sep {
   color: var(--line);
 }
 
@@ -251,7 +331,7 @@ th {
 
 .primary {
   background: linear-gradient(135deg, var(--accent), #c4892f);
-  color: #1a1408;
+  color: var(--primary-text);
   font-weight: 700;
 }
 
@@ -289,7 +369,7 @@ th {
   padding: 0.65rem 0.8rem;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: rgba(15, 28, 24, 0.7);
+  background: var(--input-bg);
   color: var(--text);
 }
 
@@ -323,7 +403,7 @@ th {
 }
 
 .danger-btn {
-  border-color: rgba(224, 122, 95, 0.45) !important;
+  border-color: var(--badge-danger-border) !important;
   color: var(--danger) !important;
 }
 
@@ -339,7 +419,7 @@ th {
   padding: 0.65rem 0.8rem;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: rgba(15, 28, 24, 0.7);
+  background: var(--input-bg);
   color: var(--text);
 }
 
@@ -389,7 +469,7 @@ th {
 
 .login-card {
   width: min(420px, 100%);
-  background: linear-gradient(180deg, rgba(36, 63, 54, 0.96), rgba(22, 40, 34, 0.98));
+  background: linear-gradient(180deg, var(--login-from), var(--login-to));
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 2rem 1.75rem;
@@ -421,7 +501,7 @@ th {
   padding: 0.75rem 0.85rem;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: rgba(15, 28, 24, 0.7);
+  background: var(--input-bg);
   color: var(--text);
 }
 
@@ -431,6 +511,7 @@ th {
   align-items: center;
   gap: 1rem;
   margin: 1.1rem 0 0.4rem;
+  flex-wrap: wrap;
 }
 
 .login-card .error {

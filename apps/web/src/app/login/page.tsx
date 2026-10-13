@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { useLocale } from '@/i18n/LocaleProvider';
+import { ThemeSwitcher } from '@/theme/ThemeSwitcher';
 import { api, setToken, setUserRole } from '@/lib/api';
 
 export default function LoginPage() {
@@ -63,6 +64,7 @@ export default function LoginPage() {
         </label>
         <div className="row">
           <LanguageSwitcher />
+          <ThemeSwitcher />
         </div>
         {error ? <p className="error">{error}</p> : null}
         <button className="primary" type="submit" disabled={loading}>

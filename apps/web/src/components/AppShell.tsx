@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { useLocale } from '@/i18n/LocaleProvider';
+import { ThemeSwitcher } from '@/theme/ThemeSwitcher';
 import { setToken } from '@/lib/api';
 
 const links = [
@@ -49,6 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="sidebar-foot">
           <LanguageSwitcher />
+          <ThemeSwitcher />
           <button type="button" className="ghost" onClick={logout}>
             {t.logout}
           </button>
