@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { api, setToken } from '@/lib/api';
+import { api, setToken, setUserRole } from '@/lib/api';
 
 export default function LoginPage() {
   const { t } = useLocale();
@@ -19,11 +19,15 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await api<{ accessToken: string }>('/auth/login', {
+      const res = await api<{
+        accessToken: string;
+        user: { role: string };
+      }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
       setToken(res.accessToken);
+      setUserRole(res.user?.role ?? null);
       router.replace('/');
     } catch {
       setError(t.error);

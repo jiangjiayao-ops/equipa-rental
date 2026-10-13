@@ -13,6 +13,7 @@ const links = [
   { href: '/clientes', key: 'customers' as const },
   { href: '/propostas', key: 'proposals' as const },
   { href: '/contratos', key: 'contracts' as const },
+  { href: '/filiais', key: 'branches' as const },
   { href: '/operacoes', key: 'operations' as const },
   { href: '/financeiro', key: 'finance' as const },
   { href: '/manutencao', key: 'maintenance' as const },

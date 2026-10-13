@@ -155,6 +155,30 @@ async function ensureOrgStructure() {
         name: 'Equipa Locações Industriais Ltda',
         tradeName: 'Equipa',
         cnpj: '12.345.678/0001-90',
+        ie: '10.20.30-4',
+        im: '123456',
+        street: 'Av. Industrial, 1000',
+        city: 'Guarulhos',
+        state: 'SP',
+        cep: '07034-000',
+        phone: '+55 11 4000-1000',
+        email: 'contato@equipa.com.br',
+      },
+    });
+  } else {
+    org = await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        name: 'Equipa Locações Industriais Ltda',
+        tradeName: 'Equipa',
+        ie: org.ie ?? '10.20.30-4',
+        im: org.im ?? '123456',
+        street: org.street ?? 'Av. Industrial, 1000',
+        city: org.city ?? 'Guarulhos',
+        state: org.state ?? 'SP',
+        cep: org.cep ?? '07034-000',
+        phone: org.phone ?? '+55 11 4000-1000',
+        email: org.email ?? 'contato@equipa.com.br',
       },
     });
   }
@@ -168,8 +192,32 @@ async function ensureOrgStructure() {
         organizationId: org.id,
         code: 'SP-01',
         name: 'Pátio Guarulhos',
+        legalName: 'Equipa Locações Industriais Ltda',
+        tradeName: 'Equipa Guarulhos',
+        cnpj: '12.345.678/0001-90',
+        ie: '10.20.30-4',
+        im: '123456',
+        street: 'Av. Industrial, 1000',
         city: 'Guarulhos',
         state: 'SP',
+        cep: '07034-000',
+        phone: '+55 11 4000-1000',
+        email: 'sp01@equipa.com.br',
+      },
+    });
+  } else {
+    branch = await prisma.branch.update({
+      where: { id: branch.id },
+      data: {
+        legalName: branch.legalName ?? 'Equipa Locações Industriais Ltda',
+        tradeName: branch.tradeName ?? 'Equipa Guarulhos',
+        cnpj: branch.cnpj ?? '12.345.678/0001-90',
+        ie: branch.ie ?? '10.20.30-4',
+        im: branch.im ?? '123456',
+        street: branch.street ?? 'Av. Industrial, 1000',
+        cep: branch.cep ?? '07034-000',
+        phone: branch.phone ?? '+55 11 4000-1000',
+        email: branch.email ?? 'sp01@equipa.com.br',
       },
     });
   }
@@ -184,8 +232,32 @@ async function ensureOrgStructure() {
         organizationId: org.id,
         code: 'RJ-01',
         name: 'Pátio Duque de Caxias',
+        legalName: 'Equipa Locações Industriais Ltda',
+        tradeName: 'Equipa Rio',
+        cnpj: '12.345.678/0002-71',
+        ie: '78.90.12-3',
+        im: '654321',
+        street: 'Rod. Washington Luís, 500',
         city: 'Duque de Caxias',
         state: 'RJ',
+        cep: '25085-000',
+        phone: '+55 21 4000-2000',
+        email: 'rj01@equipa.com.br',
+      },
+    });
+  } else {
+    await prisma.branch.update({
+      where: { id: rj.id },
+      data: {
+        legalName: rj.legalName ?? 'Equipa Locações Industriais Ltda',
+        tradeName: rj.tradeName ?? 'Equipa Rio',
+        cnpj: rj.cnpj ?? '12.345.678/0002-71',
+        ie: rj.ie ?? '78.90.12-3',
+        im: rj.im ?? '654321',
+        street: rj.street ?? 'Rod. Washington Luís, 500',
+        cep: rj.cep ?? '25085-000',
+        phone: rj.phone ?? '+55 21 4000-2000',
+        email: rj.email ?? 'rj01@equipa.com.br',
       },
     });
   }

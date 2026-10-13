@@ -8,7 +8,34 @@ export function getToken(): string | null {
 export function setToken(token: string | null) {
   if (typeof window === 'undefined') return;
   if (token) window.localStorage.setItem('equipa_token', token);
-  else window.localStorage.removeItem('equipa_token');
+  else {
+    window.localStorage.removeItem('equipa_token');
+    window.localStorage.removeItem('equipa_role');
+  }
+}
+
+export function setUserRole(role: string | null) {
+  if (typeof window === 'undefined') return;
+  if (role) window.localStorage.setItem('equipa_role', role);
+  else window.localStorage.removeItem('equipa_role');
+}
+
+export function getUserRole(): string | null {
+  if (typeof window === 'undefined') return null;
+  const stored = window.localStorage.getItem('equipa_role');
+  if (stored) return stored;
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1] ?? '')) as { role?: string };
+    if (payload.role) {
+      window.localStorage.setItem('equipa_role', payload.role);
+      return payload.role;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {

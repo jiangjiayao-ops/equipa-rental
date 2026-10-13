@@ -343,6 +343,27 @@ th {
   max-width: 170px;
 }
 
+.branch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.branch-list .nav-link {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.form-grid .field input {
+  max-width: none;
+  width: 100%;
+}
+
 @media (max-width: 640px) {
   .form-grid {
     grid-template-columns: 1fr;

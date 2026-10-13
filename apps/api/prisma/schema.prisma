@@ -105,9 +105,18 @@ enum WorkOrderStatus {
 
 model Organization {
   id        String   @id @default(cuid())
+  /// Legal / razão social
   name      String
   tradeName String?
   cnpj      String   @unique
+  ie        String?  /// Inscrição Estadual
+  im        String?  /// Inscrição Municipal
+  street    String?
+  city      String?
+  state     String?
+  cep       String?
+  phone     String?
+  email     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   branches  Branch[]
@@ -119,9 +128,19 @@ model Branch {
   organizationId String
   organization   Organization     @relation(fields: [organizationId], references: [id])
   code           String
+  /// Display / site name (e.g. pátio)
   name           String
+  legalName      String?
+  tradeName      String?
+  cnpj           String?
+  ie             String?
+  im             String?
+  street         String?
   city           String
   state          String
+  cep            String?
+  phone          String?
+  email          String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   equipment      Equipment[]

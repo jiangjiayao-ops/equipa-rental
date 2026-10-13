@@ -9,6 +9,7 @@ import { EquipmentModule } from './equipment/equipment.module';
 import { FinanceModule } from './finance/finance.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { OperationsModule } from './operations/operations.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProposalsModule } from './proposals/proposals.module';
 
@@ -18,6 +19,7 @@ import { ProposalsModule } from './proposals/proposals.module';
     AuthModule,
     DashboardModule,
     BranchesModule,
+    OrganizationsModule,
     EquipmentModule,
     CustomersModule,
     ProposalsModule,
@@ -29,3 +31,4 @@ import { ProposalsModule } from './proposals/proposals.module';
   ],
 })
 export class AppModule {}
+
