@@ -333,6 +333,7 @@ export const dictionaries = {
       masterOnlyDelete: 'Somente o master admin pode remover filiais.',
       showOrg: 'Ver organização',
       hideOrg: 'Ocultar organização',
+      close: 'Fechar',
     },
     masterDelete: {
       title: 'Confirmar exclusão',
@@ -704,6 +705,7 @@ export const dictionaries = {
       masterOnlyDelete: 'Only the master admin can remove branches.',
       showOrg: 'Show organization',
       hideOrg: 'Hide organization',
+      close: 'Close',
     },
     masterDelete: {
       title: 'Confirm deletion',

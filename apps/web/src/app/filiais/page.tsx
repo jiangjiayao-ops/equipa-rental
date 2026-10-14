@@ -162,15 +162,21 @@ export default function BranchesPage() {
         phone: formatPhoneBr(b.phone || ''),
       }));
       setBranches(formatted);
-      const nextId =
-        preferId ||
-        selectedId ||
-        formatted[0]?.id ||
-        '';
-      const stillThere = formatted.some((b) => b.id === nextId);
-      const id = stillThere ? nextId : formatted[0]?.id || '';
-      setSelectedId(id);
-      setBranch(formatted.find((b) => b.id === id) ?? null);
+      // Only open the detail panel when explicitly preferred (e.g. after create).
+      // Otherwise keep branch info collapsed like Propostas/Frota.
+      if (preferId) {
+        const found = formatted.find((b) => b.id === preferId);
+        setSelectedId(found?.id || '');
+        setBranch(found ?? null);
+      } else if (selectedId) {
+        const found = formatted.find((b) => b.id === selectedId);
+        if (found) {
+          setBranch(found);
+        } else {
+          setSelectedId('');
+          setBranch(null);
+        }
+      }
     } catch (err) {
       setError(apiErrorMessage(err, t.error));
     }
@@ -186,8 +192,15 @@ export default function BranchesPage() {
   const selectBranch = (id: string) => {
     setSelectedId(id);
     setBranch(branches.find((b) => b.id === id) ?? null);
+    setShowCreate(false);
     setMessage('');
     setError('');
+  };
+
+  const closeBranchDetail = () => {
+    setSelectedId('');
+    setBranch(null);
+    setConfirmOpen(false);
   };
 
   const saveOrg = async () => {
@@ -548,154 +561,152 @@ export default function BranchesPage() {
         </section>
       ) : null}
 
-      <div className="split">
-        <section className="panel">
-          <h2>{t.branchesPage.selectBranch}</h2>
-          <ul className="branch-list">
-            {branches.map((b) => (
-              <li key={b.id}>
+      <section className="panel">
+        <h2>{t.branchesPage.selectBranch}</h2>
+        <ul className="branch-list">
+          {branches.map((b) => (
+            <li key={b.id}>
+              <button
+                type="button"
+                className={b.id === selectedId ? 'nav-link active' : 'nav-link'}
+                onClick={() => selectBranch(b.id)}
+              >
+                <strong>{b.code}</strong> — {b.name}
+                <div className="muted">
+                  {b.cnpj || '—'} · {t.branchesPage.equipmentCount}:{' '}
+                  {b._count?.equipment ?? 0}
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {branch ? (
+        <section className="panel detail-panel" style={{ marginTop: '1rem' }}>
+          <div className="detail-head">
+            <h2>
+              {t.branchesPage.branchTitle}: {branch.code}
+            </h2>
+            <button type="button" className="ghost" onClick={closeBranchDetail}>
+              {t.branchesPage.close}
+            </button>
+          </div>
+          <div className="form-grid">
+            <Field
+              label={t.branchesPage.code}
+              value={branch.code}
+              disabled
+              onChange={() => undefined}
+            />
+            <Field
+              label={t.branchesPage.siteName}
+              value={branch.name}
+              disabled={!isAdmin}
+              onChange={(v) => setBranch({ ...branch, name: v })}
+            />
+            <Field
+              label={t.branchesPage.legalName}
+              value={branch.legalName ?? ''}
+              disabled={!isAdmin}
+              onChange={(v) => setBranch({ ...branch, legalName: v })}
+            />
+            <Field
+              label={t.branchesPage.tradeName}
+              value={branch.tradeName ?? ''}
+              disabled={!isAdmin}
+              onChange={(v) => setBranch({ ...branch, tradeName: v })}
+            />
+            <Field
+              label={t.branchesPage.cnpj}
+              value={branch.cnpj ?? ''}
+              disabled={!isAdmin}
+              format={formatCnpj}
+              onChange={(v) => setBranch({ ...branch, cnpj: v })}
+            />
+            <Field
+              label={t.branchesPage.ie}
+              value={branch.ie ?? ''}
+              disabled={!isAdmin}
+              onChange={(v) => setBranch({ ...branch, ie: v })}
+            />
+            <Field
+              label={t.branchesPage.im}
+              value={branch.im ?? ''}
+              disabled={!isAdmin}
+              onChange={(v) => setBranch({ ...branch, im: v })}
+            />
+            <Field
+              label={t.branchesPage.street}
+              value={branch.street ?? ''}
+              disabled={!isAdmin}
+              onChange={(v) => setBranch({ ...branch, street: v })}
+            />
+            <Field
+              label={t.branchesPage.city}
+              value={branch.city}
+              disabled={!isAdmin}
+              onChange={(v) => setBranch({ ...branch, city: v })}
+            />
+            <Field
+              label={t.branchesPage.state}
+              value={branch.state}
+              disabled={!isAdmin}
+              onChange={(v) =>
+                setBranch({
+                  ...branch,
+                  state: v.toUpperCase().slice(0, 2),
+                })
+              }
+            />
+            <Field
+              label={t.branchesPage.cep}
+              value={branch.cep ?? ''}
+              disabled={!isAdmin}
+              format={formatCep}
+              onChange={(v) => setBranch({ ...branch, cep: v })}
+            />
+            <Field
+              label={t.branchesPage.phone}
+              value={branch.phone ?? ''}
+              disabled={!isAdmin}
+              format={formatPhoneBr}
+              onChange={(v) => setBranch({ ...branch, phone: v })}
+            />
+            <Field
+              label={t.branchesPage.email}
+              value={branch.email ?? ''}
+              disabled={!isAdmin}
+              onChange={(v) => setBranch({ ...branch, email: v })}
+            />
+          </div>
+          {isAdmin ? (
+            <div className="actions">
+              <button
+                type="button"
+                className="primary"
+                disabled={busy === 'branch'}
+                onClick={saveBranch}
+              >
+                {t.branchesPage.save}
+              </button>
+              {master ? (
                 <button
                   type="button"
-                  className={b.id === selectedId ? 'nav-link active' : 'nav-link'}
-                  onClick={() => selectBranch(b.id)}
+                  className="ghost danger-btn"
+                  disabled={busy === 'delete'}
+                  onClick={() => setConfirmOpen(true)}
                 >
-                  <strong>{b.code}</strong> — {b.name}
-                  <div className="muted">
-                    {b.cnpj || '—'} · {t.branchesPage.equipmentCount}:{' '}
-                    {b._count?.equipment ?? 0}
-                  </div>
+                  {t.branchesPage.deleteBranch}
                 </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="panel">
-          <h2>
-            {t.branchesPage.branchTitle}
-            {branch ? `: ${branch.code}` : ''}
-          </h2>
-          {branch ? (
-            <>
-              <div className="form-grid">
-                <Field
-                  label={t.branchesPage.code}
-                  value={branch.code}
-                  disabled
-                  onChange={() => undefined}
-                />
-                <Field
-                  label={t.branchesPage.siteName}
-                  value={branch.name}
-                  disabled={!isAdmin}
-                  onChange={(v) => setBranch({ ...branch, name: v })}
-                />
-                <Field
-                  label={t.branchesPage.legalName}
-                  value={branch.legalName ?? ''}
-                  disabled={!isAdmin}
-                  onChange={(v) => setBranch({ ...branch, legalName: v })}
-                />
-                <Field
-                  label={t.branchesPage.tradeName}
-                  value={branch.tradeName ?? ''}
-                  disabled={!isAdmin}
-                  onChange={(v) => setBranch({ ...branch, tradeName: v })}
-                />
-                <Field
-                  label={t.branchesPage.cnpj}
-                  value={branch.cnpj ?? ''}
-                  disabled={!isAdmin}
-                  format={formatCnpj}
-                  onChange={(v) => setBranch({ ...branch, cnpj: v })}
-                />
-                <Field
-                  label={t.branchesPage.ie}
-                  value={branch.ie ?? ''}
-                  disabled={!isAdmin}
-                  onChange={(v) => setBranch({ ...branch, ie: v })}
-                />
-                <Field
-                  label={t.branchesPage.im}
-                  value={branch.im ?? ''}
-                  disabled={!isAdmin}
-                  onChange={(v) => setBranch({ ...branch, im: v })}
-                />
-                <Field
-                  label={t.branchesPage.street}
-                  value={branch.street ?? ''}
-                  disabled={!isAdmin}
-                  onChange={(v) => setBranch({ ...branch, street: v })}
-                />
-                <Field
-                  label={t.branchesPage.city}
-                  value={branch.city}
-                  disabled={!isAdmin}
-                  onChange={(v) => setBranch({ ...branch, city: v })}
-                />
-                <Field
-                  label={t.branchesPage.state}
-                  value={branch.state}
-                  disabled={!isAdmin}
-                  onChange={(v) =>
-                    setBranch({
-                      ...branch,
-                      state: v.toUpperCase().slice(0, 2),
-                    })
-                  }
-                />
-                <Field
-                  label={t.branchesPage.cep}
-                  value={branch.cep ?? ''}
-                  disabled={!isAdmin}
-                  format={formatCep}
-                  onChange={(v) => setBranch({ ...branch, cep: v })}
-                />
-                <Field
-                  label={t.branchesPage.phone}
-                  value={branch.phone ?? ''}
-                  disabled={!isAdmin}
-                  format={formatPhoneBr}
-                  onChange={(v) => setBranch({ ...branch, phone: v })}
-                />
-                <Field
-                  label={t.branchesPage.email}
-                  value={branch.email ?? ''}
-                  disabled={!isAdmin}
-                  onChange={(v) => setBranch({ ...branch, email: v })}
-                />
-              </div>
-              {isAdmin ? (
-                <div className="actions">
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={busy === 'branch'}
-                    onClick={saveBranch}
-                  >
-                    {t.branchesPage.save}
-                  </button>
-                  {master ? (
-                    <button
-                      type="button"
-                      className="ghost danger-btn"
-                      disabled={busy === 'delete'}
-                      onClick={() => setConfirmOpen(true)}
-                    >
-                      {t.branchesPage.deleteBranch}
-                    </button>
-                  ) : null}
-                </div>
               ) : null}
-              {isAdmin && !master ? (
-                <p className="muted">{t.branchesPage.masterOnlyDelete}</p>
-              ) : null}
-            </>
-          ) : (
-            <p className="muted">{t.loading}</p>
-          )}
+            </div>
+          ) : null}
+          {isAdmin && !master ? (
+            <p className="muted">{t.branchesPage.masterOnlyDelete}</p>
+          ) : null}
         </section>
-      </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmOpen && Boolean(branch)}
