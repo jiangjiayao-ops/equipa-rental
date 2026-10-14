@@ -38,6 +38,14 @@ class CreateCustomerDto {
 
   @IsOptional()
   @IsString()
+  street?: string | null;
+
+  @IsOptional()
+  @IsString()
+  cep?: string | null;
+
+  @IsOptional()
+  @IsString()
   contactName?: string | null;
 }
 

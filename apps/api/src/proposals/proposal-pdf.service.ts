@@ -9,12 +9,20 @@ const copy = {
     title: 'Proposta comercial',
     customer: 'Cliente',
     branch: 'Filial',
+    proposalBranch: 'Filial da proposta',
+    machineBranches: 'Filiais das máquinas',
     status: 'Status',
     validity: 'Validade',
     billingTiming: 'Faturamento',
     advance: 'Antecipado',
     arrears: 'Após o período',
     equipment: 'Equipamentos',
+    code: 'Código',
+    brand: 'Marca',
+    model: 'Modelo',
+    serial: 'Série',
+    hours: 'Horas permitidas',
+    unlimited: 'Ilimitado',
     options: 'Opções de período',
     rate: 'Taxa',
     mob: 'Mobilização',
@@ -29,12 +37,20 @@ const copy = {
     title: 'Commercial proposal',
     customer: 'Customer',
     branch: 'Branch',
+    proposalBranch: 'Proposal branch',
+    machineBranches: 'Machine branches',
     status: 'Status',
     validity: 'Valid until',
     billingTiming: 'Billing timing',
     advance: 'Pay in advance',
     arrears: 'Pay in arrears',
     equipment: 'Equipment',
+    code: 'Code',
+    brand: 'Brand',
+    model: 'Model',
+    serial: 'Serial',
+    hours: 'Allowed working hours',
+    unlimited: 'Unlimited',
     options: 'Period options',
     rate: 'Rate',
     mob: 'Mobilization',
@@ -71,7 +87,11 @@ export class ProposalPdfService {
       include: {
         customer: true,
         branch: true,
-        lines: { include: { equipment: true } },
+        lines: {
+          include: {
+            equipment: { include: { branch: true } },
+          },
+        },
         options: { orderBy: { sortOrder: 'asc' } },
       },
     });
@@ -88,10 +108,7 @@ export class ProposalPdfService {
     });
 
     doc.fillColor('#15241e').fontSize(20).text('Equipa', { continued: false });
-    doc
-      .fillColor('#b8862e')
-      .fontSize(14)
-      .text(t.title, { continued: false });
+    doc.fillColor('#b8862e').fontSize(14).text(t.title, { continued: false });
     doc.moveDown(0.3);
     doc.fillColor('#15241e').fontSize(16).text(proposal.number);
     doc.moveDown(0.6);
@@ -99,13 +116,31 @@ export class ProposalPdfService {
     doc.fontSize(11).fillColor('#4f6a5e');
     doc.text(`${t.customer}: ${proposal.customer.legalName}`);
     if (proposal.customer.document) {
-      doc.text(`CNPJ: ${proposal.customer.document}`);
+      doc.text(`CNPJ/CPF: ${proposal.customer.document}`);
     }
-    doc.text(`${t.branch}: ${proposal.branch.code} — ${proposal.branch.name}`);
+    doc.text(
+      `${t.proposalBranch}: ${proposal.branch.code} — ${proposal.branch.name}` +
+        (proposal.branch.city
+          ? ` (${proposal.branch.city}/${proposal.branch.state})`
+          : ''),
+    );
+    if (proposal.branch.cnpj) {
+      doc.text(`CNPJ filial: ${proposal.branch.cnpj}`);
+    }
+    if (proposal.branch.phone || proposal.branch.email) {
+      doc.text(
+        [proposal.branch.phone, proposal.branch.email].filter(Boolean).join(' · '),
+      );
+    }
     doc.text(`${t.status}: ${proposal.status}`);
     doc.text(
       `${t.billingTiming}: ${
         proposal.billingTiming === 'ARREARS' ? t.arrears : t.advance
+      }`,
+    );
+    doc.text(
+      `${t.hours}: ${
+        proposal.hoursUnlimited ? t.unlimited : String(proposal.allowedHours)
       }`,
     );
     if (proposal.validUntil) {
@@ -115,11 +150,38 @@ export class ProposalPdfService {
     }
     doc.moveDown(0.8);
 
+    const machineBranches = new Map<string, string>();
+    for (const line of proposal.lines) {
+      const b = line.equipment?.branch;
+      if (b) machineBranches.set(b.code, `${b.code} — ${b.name}`);
+    }
+    if (machineBranches.size) {
+      doc.fillColor('#15241e').fontSize(13).text(t.machineBranches);
+      doc.moveDown(0.2);
+      doc.fontSize(11).fillColor('#4f6a5e');
+      for (const label of machineBranches.values()) {
+        doc.text(`• ${label}`);
+      }
+      doc.moveDown(0.6);
+    }
+
     doc.fillColor('#15241e').fontSize(13).text(t.equipment);
     doc.moveDown(0.3);
     doc.fontSize(11).fillColor('#15241e');
     for (const line of proposal.lines) {
-      doc.text(`• ${line.description}${line.quantity > 1 ? ` × ${line.quantity}` : ''}`);
+      const eq = line.equipment;
+      if (!eq) {
+        doc.text(`• ${line.description}`);
+        continue;
+      }
+      doc.text(
+        `• ${eq.code} — ${eq.brand} ${eq.model}` +
+          (eq.serialNumber ? ` · ${t.serial} ${eq.serialNumber}` : '') +
+          ` · ${eq.status}` +
+          (eq.branch ? ` · ${eq.branch.code}` : ''),
+      );
+      doc.fillColor('#4f6a5e').text(`  ${line.description}`, { indent: 8 });
+      doc.fillColor('#15241e');
     }
     doc.moveDown(0.8);
 
@@ -127,6 +189,7 @@ export class ProposalPdfService {
     doc.moveDown(0.4);
 
     for (const opt of proposal.options) {
+      if (doc.y > 700) doc.addPage();
       const top = doc.y;
       doc
         .roundedRect(50, top, 495, 78, 6)

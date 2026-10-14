@@ -6,15 +6,10 @@ import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
 import { api, downloadApiFile, formatBrl } from '@/lib/api';
-import {
-  formatCpfOrCnpj,
-  formatPhoneBr,
-  storeCpfOrCnpj,
-  storePhone,
-} from '@/lib/brFormat';
 
 type BillingTiming = 'ADVANCE' | 'ARREARS';
 type BillingPeriod = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+type HoursMode = 'default' | 'unlimited' | 'custom';
 
 type Option = {
   id?: string;
@@ -31,6 +26,8 @@ type Proposal = {
   number: string;
   status: string;
   billingTiming: BillingTiming;
+  allowedHours?: number;
+  hoursUnlimited?: boolean;
   publicToken?: string | null;
   notes?: string | null;
   validUntil?: string | null;
@@ -129,15 +126,8 @@ export default function ProposalsPage() {
   const [fleetSearch, setFleetSearch] = useState('');
   const [pickedId, setPickedId] = useState('');
   const [selectedMachines, setSelectedMachines] = useState<Equipment[]>([]);
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({
-    legalName: '',
-    tradeName: '',
-    document: '',
-    email: '',
-    phone: '',
-    contactName: '',
-  });
+  const [hoursMode, setHoursMode] = useState<HoursMode>('default');
+  const [customHours, setCustomHours] = useState(200);
 
   const [form, setForm] = useState({
     customerId: '',
@@ -147,6 +137,14 @@ export default function ProposalsPage() {
     notes: '',
     options: defaultOptions(),
   });
+
+  const formatHoursLabel = (p: {
+    hoursUnlimited?: boolean;
+    allowedHours?: number;
+  }) =>
+    p.hoursUnlimited
+      ? t.proposals.hoursUnlimited
+      : `${p.allowedHours ?? 200}`;
 
   const filteredFleet = useMemo(() => {
     const q = fleetSearch.trim().toLowerCase();
@@ -223,49 +221,6 @@ export default function ProposalsPage() {
     setPickedId(next?.id || '');
   };
 
-  const createCustomer = async () => {
-    setBusy('customer');
-    setError('');
-    setMessage('');
-    try {
-      const created = await api<Customer>('/customers', {
-        method: 'POST',
-        body: JSON.stringify({
-          legalName: newCustomer.legalName.trim(),
-          tradeName: newCustomer.tradeName.trim() || undefined,
-          document: storeCpfOrCnpj(newCustomer.document) || newCustomer.document,
-          documentType:
-            (newCustomer.document.replace(/\D/g, '').length || 0) <= 11
-              ? 'CPF'
-              : 'CNPJ',
-          email: newCustomer.email.trim() || null,
-          phone: storePhone(newCustomer.phone),
-          contactName: newCustomer.contactName.trim() || null,
-        }),
-      });
-      setCustomers((prev) =>
-        [...prev, created].sort((a, b) =>
-          a.legalName.localeCompare(b.legalName),
-        ),
-      );
-      setForm((prev) => ({ ...prev, customerId: created.id }));
-      setShowNewCustomer(false);
-      setNewCustomer({
-        legalName: '',
-        tradeName: '',
-        document: '',
-        email: '',
-        phone: '',
-        contactName: '',
-      });
-      setMessage(`${t.proposals.createCustomer}: ${created.legalName}`);
-    } catch (err) {
-      setError(apiError(err, t.error));
-    } finally {
-      setBusy('');
-    }
-  };
-
   const createProposal = async () => {
     if (!selectedMachines.length) {
       setError(t.proposals.selectMachineHint);
@@ -275,6 +230,13 @@ export default function ProposalsPage() {
     setError('');
     setMessage('');
     try {
+      const hoursUnlimited = hoursMode === 'unlimited';
+      const allowedHours =
+        hoursMode === 'custom'
+          ? Number(customHours) || 200
+          : hoursMode === 'default'
+            ? 200
+            : undefined;
       const created = await api<Proposal>('/proposals', {
         method: 'POST',
         body: JSON.stringify({
@@ -283,6 +245,8 @@ export default function ProposalsPage() {
           billingTiming: form.billingTiming,
           validUntil: form.validUntil || undefined,
           notes: form.notes || undefined,
+          hoursUnlimited,
+          allowedHours: hoursUnlimited ? undefined : allowedHours,
           lines: selectedMachines.map((m) => ({ equipmentId: m.id })),
           options: form.options.map((o, i) => ({
             label: o.label,
@@ -297,6 +261,8 @@ export default function ProposalsPage() {
       });
       setShowCreate(false);
       setSelectedMachines([]);
+      setHoursMode('default');
+      setCustomHours(200);
       setMessage(`${t.proposals.create}: ${created.number}`);
       await load();
       await open(created.id);
@@ -406,16 +372,6 @@ export default function ProposalsPage() {
                 ))}
               </select>
             </label>
-            <div className="field" style={{ justifyContent: 'end' }}>
-              <span>&nbsp;</span>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => setShowNewCustomer((v) => !v)}
-              >
-                {showNewCustomer ? t.proposals.cancel : t.proposals.addCustomer}
-              </button>
-            </div>
             <label className="field">
               <span>{t.fleet.branch}</span>
               <select
@@ -452,6 +408,28 @@ export default function ProposalsPage() {
                 onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
               />
             </label>
+            <label className="field">
+              <span>{t.proposals.allowedHours}</span>
+              <select
+                value={hoursMode}
+                onChange={(e) => setHoursMode(e.target.value as HoursMode)}
+              >
+                <option value="default">{t.proposals.hoursDefault}</option>
+                <option value="unlimited">{t.proposals.hoursUnlimited}</option>
+                <option value="custom">{t.proposals.hoursCustom}</option>
+              </select>
+            </label>
+            {hoursMode === 'custom' ? (
+              <label className="field">
+                <span>{t.proposals.hoursValue}</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={customHours}
+                  onChange={(e) => setCustomHours(Number(e.target.value))}
+                />
+              </label>
+            ) : null}
             <label className="field" style={{ gridColumn: '1 / -1' }}>
               <span>{t.proposals.notes}</span>
               <input
@@ -460,88 +438,7 @@ export default function ProposalsPage() {
               />
             </label>
           </div>
-
-          {showNewCustomer ? (
-            <section className="inline-create">
-              <h3>{t.proposals.addCustomer}</h3>
-              <div className="form-grid">
-                <label className="field">
-                  <span>{t.proposals.customerName}</span>
-                  <input
-                    value={newCustomer.legalName}
-                    onChange={(e) =>
-                      setNewCustomer({ ...newCustomer, legalName: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>{t.proposals.tradeName}</span>
-                  <input
-                    value={newCustomer.tradeName}
-                    onChange={(e) =>
-                      setNewCustomer({ ...newCustomer, tradeName: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>{t.proposals.document}</span>
-                  <input
-                    value={newCustomer.document}
-                    onChange={(e) =>
-                      setNewCustomer({
-                        ...newCustomer,
-                        document: formatCpfOrCnpj(e.target.value),
-                      })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>{t.proposals.contactName}</span>
-                  <input
-                    value={newCustomer.contactName}
-                    onChange={(e) =>
-                      setNewCustomer({
-                        ...newCustomer,
-                        contactName: e.target.value,
-                      })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>{t.email}</span>
-                  <input
-                    type="email"
-                    value={newCustomer.email}
-                    onChange={(e) =>
-                      setNewCustomer({ ...newCustomer, email: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  <span>{t.proposals.phoneWhatsapp}</span>
-                  <input
-                    value={newCustomer.phone}
-                    onChange={(e) =>
-                      setNewCustomer({
-                        ...newCustomer,
-                        phone: formatPhoneBr(e.target.value),
-                      })
-                    }
-                  />
-                </label>
-              </div>
-              <div className="actions">
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={busy === 'customer'}
-                  onClick={createCustomer}
-                >
-                  {t.proposals.createCustomer}
-                </button>
-              </div>
-            </section>
-          ) : null}
+          <p className="muted">{t.proposals.hoursPerPeriod}</p>
 
           <h3 style={{ marginTop: '1.25rem' }}>{t.proposals.fleetPicker}</h3>
           <p className="muted">{t.proposals.onRentHint}</p>
@@ -833,6 +730,8 @@ export default function ProposalsPage() {
             <span className="badge">{selected.status}</span>
             {' · '}
             {t.status[selected.billingTiming as keyof typeof t.status]}
+            {' · '}
+            {t.proposals.allowedHours}: {formatHoursLabel(selected)}
           </p>
 
           <h3>{t.proposals.equipment}</h3>

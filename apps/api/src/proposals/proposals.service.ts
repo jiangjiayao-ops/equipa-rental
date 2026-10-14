@@ -36,6 +36,8 @@ export type CreateProposalInput = {
   customerId: string;
   branchId: string;
   billingTiming?: BillingTiming;
+  allowedHours?: number;
+  hoursUnlimited?: boolean;
   validUntil?: string;
   notes?: string;
   lines: ProposalLineInput[];
@@ -91,7 +93,11 @@ export class ProposalsService {
           },
         },
         branch: { select: { code: true, name: true, city: true, state: true } },
-        lines: { include: { equipment: true } },
+        lines: {
+          include: {
+            equipment: { include: { branch: true, category: true } },
+          },
+        },
         options: { orderBy: { sortOrder: 'asc' } },
         acceptedOption: true,
         contracts: { select: { id: true, number: true, status: true } },
@@ -138,6 +144,13 @@ export class ProposalsService {
     const publicToken = randomBytes(24).toString('hex');
     const defaultPeriod = input.options[0].billingPeriod;
 
+    const hoursUnlimited = Boolean(input.hoursUnlimited);
+    const allowedHours = hoursUnlimited
+      ? 0
+      : input.allowedHours != null && input.allowedHours > 0
+        ? input.allowedHours
+        : 200;
+
     return this.prisma.proposal.create({
       data: {
         number,
@@ -145,6 +158,8 @@ export class ProposalsService {
         branchId: input.branchId,
         status: ProposalStatus.DRAFT,
         billingTiming: input.billingTiming ?? BillingTiming.ADVANCE,
+        allowedHours,
+        hoursUnlimited,
         validUntil: input.validUntil ? new Date(input.validUntil) : null,
         notes: input.notes,
         publicToken,
@@ -155,7 +170,7 @@ export class ProposalsService {
               equipmentId: eq.id,
               description:
                 line.description ||
-                `${eq.brand} ${eq.model} · ${eq.code}`,
+                `${eq.brand} ${eq.model} · ${eq.code}${eq.serialNumber ? ` · SN ${eq.serialNumber}` : ''}`,
               billingPeriod: defaultPeriod,
               unitRate: 0,
               quantity: line.quantity ?? 1,
@@ -376,6 +391,9 @@ export class ProposalsService {
         data: { selected: true },
       });
 
+      const hoursNote = proposal.hoursUnlimited
+        ? 'Horas: ilimitado'
+        : `Horas: limite ${proposal.allowedHours}/período`;
       const contract = await tx.contract.create({
         data: {
           number: contractNumber,
@@ -385,11 +403,14 @@ export class ProposalsService {
           status: ContractStatus.ACTIVE,
           billingPeriod: option.billingPeriod,
           billingTiming: proposal.billingTiming,
+          allowedHours: proposal.allowedHours,
+          hoursUnlimited: proposal.hoursUnlimited,
           startDate: start,
           endDate: end,
           notes: [
             `Aceite da proposta ${proposal.number}`,
             `Opção: ${option.label} (${option.durationDays} dias)`,
+            hoursNote,
             proposal.notes ?? '',
           ]
             .filter(Boolean)
@@ -397,7 +418,7 @@ export class ProposalsService {
           lines: {
             create: proposal.lines.map((line) => ({
               equipmentId: line.equipmentId!,
-              description: line.description,
+              description: `${line.description} · ${hoursNote}`,
               billingPeriod: option.billingPeriod,
               unitRate: option.unitRate,
               mobFee: option.mobFee,
@@ -490,6 +511,8 @@ export class ProposalsService {
           status: ContractStatus.DRAFT,
           billingPeriod: option.billingPeriod,
           billingTiming: timing,
+          allowedHours: proposal.allowedHours,
+          hoursUnlimited: proposal.hoursUnlimited,
           startDate: new Date(startDate),
           endDate: new Date(endDate),
           notes: proposal.notes,

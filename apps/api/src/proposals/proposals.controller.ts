@@ -18,6 +18,7 @@ import {
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -82,6 +83,15 @@ class CreateProposalDto {
   @IsOptional()
   @IsEnum(BillingTiming)
   billingTiming?: BillingTiming;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  allowedHours?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  hoursUnlimited?: boolean;
 
   @IsOptional()
   @IsString()

@@ -282,6 +282,9 @@ model Proposal {
   status           ProposalStatus         @default(DRAFT)
   /// Copied to Contract on accept/convert. Default ADVANCE.
   billingTiming    BillingTiming          @default(ADVANCE)
+  /// Allowed machine hours for the rental. Ignored when hoursUnlimited=true.
+  allowedHours     Float                  @default(200)
+  hoursUnlimited   Boolean                @default(false)
   validUntil       DateTime?
   notes            String?
   /// Opaque token for public client acceptance page (/p/:token).
@@ -357,6 +360,8 @@ model Contract {
   billingPeriod BillingPeriod
   /// ADVANCE (default): invoice at period start. ARREARS: invoice at period end.
   billingTiming BillingTiming    @default(ADVANCE)
+  allowedHours  Float            @default(200)
+  hoursUnlimited Boolean         @default(false)
   startDate     DateTime
   endDate       DateTime
   depositAmount Float            @default(0)

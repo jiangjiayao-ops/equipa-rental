@@ -15,6 +15,8 @@ export type CreateCustomerInput = {
   phone?: string | null;
   city?: string | null;
   state?: string | null;
+  street?: string | null;
+  cep?: string | null;
   contactName?: string | null;
 };
 
@@ -64,6 +66,10 @@ export class CustomersService {
       throw new ConflictException('Já existe cliente com este documento');
     }
 
+    const city = input.city?.trim() || null;
+    const state = input.state?.trim()?.toUpperCase() || null;
+    const street = input.street?.trim() || null;
+
     return this.prisma.customer.create({
       data: {
         legalName,
@@ -72,8 +78,8 @@ export class CustomersService {
         documentType,
         email: input.email?.trim() || null,
         phone: input.phone?.trim() || null,
-        city: input.city?.trim() || null,
-        state: input.state?.trim()?.toUpperCase() || null,
+        city,
+        state,
         contacts: input.contactName?.trim()
           ? {
               create: {
@@ -84,6 +90,17 @@ export class CustomersService {
               },
             }
           : undefined,
+        sites:
+          street && city && state
+            ? {
+                create: {
+                  name: 'Principal',
+                  address: `${street}${input.cep ? ` · CEP ${input.cep}` : ''}`,
+                  city,
+                  state,
+                },
+              }
+            : undefined,
       },
       include: {
         contacts: true,

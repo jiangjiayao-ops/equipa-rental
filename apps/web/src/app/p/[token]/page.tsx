@@ -25,6 +25,8 @@ type PublicProposal = {
   notes?: string | null;
   validUntil?: string | null;
   billingTiming: string;
+  allowedHours?: number;
+  hoursUnlimited?: boolean;
   customer: { legalName: string };
   branch: { code: string; name: string };
   lines: Array<{ description: string; quantity: number }>;
@@ -118,6 +120,13 @@ export default function PublicProposalPage() {
               <br />
               <span className="muted">
                 {proposal.branch.code} · {proposal.branch.name}
+              </span>
+              <br />
+              <span>
+                {t.publicProposal.allowedHours}:{' '}
+                {proposal.hoursUnlimited
+                  ? t.publicProposal.hoursUnlimited
+                  : proposal.allowedHours ?? 200}
               </span>
             </p>
             <p className="muted">{t.publicProposal.subtitle}</p>

@@ -1,0 +1,7 @@
+-- AlterTable Proposal
+ALTER TABLE "Proposal" ADD COLUMN "allowedHours" DOUBLE PRECISION NOT NULL DEFAULT 200;
+ALTER TABLE "Proposal" ADD COLUMN "hoursUnlimited" BOOLEAN NOT NULL DEFAULT false;
+
+-- AlterTable Contract
+ALTER TABLE "Contract" ADD COLUMN "allowedHours" DOUBLE PRECISION NOT NULL DEFAULT 200;
+ALTER TABLE "Contract" ADD COLUMN "hoursUnlimited" BOOLEAN NOT NULL DEFAULT false;
