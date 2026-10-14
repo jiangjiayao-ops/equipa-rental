@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { api } from '@/lib/api';
+import { api, isMasterAdmin } from '@/lib/api';
 
 type Equipment = {
   id: string;
@@ -121,6 +122,11 @@ export default function FleetPage() {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<MachineForm>(emptyForm());
+  const [master, setMaster] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [retireMode, setRetireMode] = useState<
+    'sold' | 'retired' | 'unavailable' | 'hard'
+  >('retired');
 
   const load = async () => {
     try {
@@ -143,6 +149,7 @@ export default function FleetPage() {
   };
 
   useEffect(() => {
+    setMaster(isMasterAdmin());
     load();
   }, [t.error]);
 
@@ -207,6 +214,28 @@ export default function FleetPage() {
       setForm(formFromEquipment(updated));
       setEditing(false);
       setMessage(`${t.fleet.updated}: ${updated.code}`);
+      await load();
+    } catch (err) {
+      setError(apiError(err, t.error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runRetire = async () => {
+    if (!selected) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await api(`/equipment/${selected.id}?mode=${retireMode}`, {
+        method: 'DELETE',
+      });
+      setMessage(
+        retireMode === 'hard' ? t.fleet.hardDeleteDone : t.fleet.retireDone,
+      );
+      setConfirmOpen(false);
+      setSelected(null);
       await load();
     } catch (err) {
       setError(apiError(err, t.error));
@@ -518,6 +547,18 @@ export default function FleetPage() {
                 >
                   {t.fleet.edit}
                 </button>
+                {master ? (
+                  <button
+                    type="button"
+                    className="ghost danger-btn"
+                    onClick={() => {
+                      setRetireMode('retired');
+                      setConfirmOpen(true);
+                    }}
+                  >
+                    {t.fleet.retire}
+                  </button>
+                ) : null}
               </div>
             </>
           ) : (
@@ -547,6 +588,37 @@ export default function FleetPage() {
           )}
         </section>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmOpen && Boolean(selected)}
+        title={t.masterDelete.title}
+        entityLabel={selected?.code ?? ''}
+        message={t.masterDelete.equipmentMsg}
+        confirmLabel={
+          retireMode === 'hard' ? t.fleet.modeHard : t.fleet.retire
+        }
+        cancelLabel={t.masterDelete.cancel}
+        busy={busy}
+        onConfirm={runRetire}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        <label className="field">
+          <span>{t.fleet.status}</span>
+          <select
+            value={retireMode}
+            onChange={(e) =>
+              setRetireMode(
+                e.target.value as 'sold' | 'retired' | 'unavailable' | 'hard',
+              )
+            }
+          >
+            <option value="sold">{t.fleet.modeSold}</option>
+            <option value="retired">{t.fleet.modeRetired}</option>
+            <option value="unavailable">{t.fleet.modeUnavailable}</option>
+            <option value="hard">{t.fleet.modeHard}</option>
+          </select>
+        </label>
+      </ConfirmDialog>
     </AppShell>
   );
 }

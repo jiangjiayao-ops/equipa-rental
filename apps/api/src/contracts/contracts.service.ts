@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { BillingPeriod, BillingTiming, ContractStatus } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type CreateContractInput = {
@@ -34,10 +35,14 @@ export type UpdateContractInput = {
 
 @Injectable()
 export class ContractsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   list() {
     return this.prisma.contract.findMany({
+      where: { deletedAt: null },
       include: {
         customer: true,
         branch: true,
@@ -61,6 +66,67 @@ export class ContractsService {
         mobilizations: true,
       },
     });
+  }
+
+  async getOrThrow(id: string) {
+    const contract = await this.get(id);
+    if (!contract || contract.deletedAt) {
+      throw new NotFoundException('Contrato não encontrado');
+    }
+    return contract;
+  }
+
+  async remove(
+    id: string,
+    actor: { userId: string; email: string },
+    hard = false,
+  ) {
+    const contract = await this.getOrThrow(id);
+    const invoices = await this.prisma.invoice.count({
+      where: { contractId: id },
+    });
+
+    if (hard) {
+      if (contract.status !== ContractStatus.DRAFT || invoices > 0) {
+        throw new BadRequestException(
+          'Exclusão permanente só para contratos rascunho sem faturas. Use arquivar.',
+        );
+      }
+      await this.prisma.$transaction(async (tx) => {
+        await tx.contractLine.deleteMany({ where: { contractId: id } });
+        await tx.contractAmendment.deleteMany({ where: { contractId: id } });
+        await tx.contract.delete({ where: { id } });
+      });
+      await this.audit.log({
+        actorId: actor.userId,
+        actorEmail: actor.email,
+        action: 'DELETE_HARD',
+        entityType: 'Contract',
+        entityId: id,
+        entityLabel: contract.number,
+      });
+      return { ok: true, mode: 'hard' as const, id, label: contract.number };
+    }
+
+    await this.prisma.contract.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        status:
+          contract.status === ContractStatus.CLOSED
+            ? contract.status
+            : ContractStatus.CANCELLED,
+      },
+    });
+    await this.audit.log({
+      actorId: actor.userId,
+      actorEmail: actor.email,
+      action: 'DELETE_SOFT',
+      entityType: 'Contract',
+      entityId: id,
+      entityLabel: contract.number,
+    });
+    return { ok: true, mode: 'soft' as const, id, label: contract.number };
   }
 
   async create(input: CreateContractInput) {

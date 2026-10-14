@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -18,7 +19,9 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { EquipmentStatus } from '@prisma/client';
+import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { MasterAdminGuard } from '../auth/master-admin.guard';
 import { EquipmentService } from './equipment.service';
 
 class UpsertEquipmentDto {
@@ -112,5 +115,24 @@ export class EquipmentController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: UpsertEquipmentDto) {
     return this.equipment.update(id, body);
+  }
+
+  @Delete(':id')
+  @UseGuards(MasterAdminGuard)
+  remove(
+    @Param('id') id: string,
+    @Query('mode') mode: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const m = (mode || 'retired').toLowerCase();
+    const allowed = ['sold', 'retired', 'unavailable', 'hard'] as const;
+    const picked = allowed.includes(m as (typeof allowed)[number])
+      ? (m as (typeof allowed)[number])
+      : 'retired';
+    return this.equipment.remove(
+      id,
+      { userId: user.userId, email: user.email },
+      picked,
+    );
   }
 }

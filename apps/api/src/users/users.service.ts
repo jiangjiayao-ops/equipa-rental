@@ -28,6 +28,7 @@ const publicSelect = {
   phone: true,
   whatsapp: true,
   role: true,
+  isMasterAdmin: true,
   active: true,
   organizationId: true,
   createdAt: true,
@@ -124,7 +125,7 @@ export class UsersService {
   }
 
   async update(id: string, input: UpsertUserInput) {
-    await this.getOrThrow(id);
+    const existing = await this.getOrThrow(id);
     const name = input.name?.trim();
     const email = input.email?.trim().toLowerCase();
     if (!name || !email) {
@@ -136,6 +137,17 @@ export class UsersService {
     });
     if (clash) {
       throw new ConflictException('Já existe usuário com este e-mail');
+    }
+
+    if (existing.isMasterAdmin && input.active === false) {
+      const masters = await this.prisma.user.count({
+        where: { isMasterAdmin: true, active: true },
+      });
+      if (masters <= 1) {
+        throw new BadRequestException(
+          'Não é possível desativar o último master administrador',
+        );
+      }
     }
 
     const data: Record<string, unknown> = {

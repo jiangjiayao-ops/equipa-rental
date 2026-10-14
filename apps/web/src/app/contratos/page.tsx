@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { api, formatDate } from '@/lib/api';
+import { api, formatDate, isMasterAdmin } from '@/lib/api';
 
 type BillingTiming = 'ADVANCE' | 'ARREARS';
 
@@ -48,6 +49,18 @@ function timingLabel(
   return t.status.ADVANCE ?? t.contracts.advance;
 }
 
+function apiError(err: unknown, fallback: string) {
+  if (!(err instanceof Error)) return fallback;
+  try {
+    const parsed = JSON.parse(err.message) as { message?: string | string[] };
+    if (Array.isArray(parsed.message)) return parsed.message.join('; ');
+    if (typeof parsed.message === 'string') return parsed.message;
+  } catch {
+    /* plain */
+  }
+  return err.message || fallback;
+}
+
 export default function ContractsPage() {
   const { t, locale } = useLocale();
   const [rows, setRows] = useState<Contract[]>([]);
@@ -59,6 +72,10 @@ export default function ContractsPage() {
   const [editTiming, setEditTiming] = useState<BillingTiming>('ADVANCE');
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [master, setMaster] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [hardDelete, setHardDelete] = useState(false);
 
   const [createForm, setCreateForm] = useState({
     customerId: '',
@@ -77,6 +94,7 @@ export default function ContractsPage() {
       .catch(() => setError(t.error));
 
   useEffect(() => {
+    setMaster(isMasterAdmin());
     load();
     Promise.all([
       api<Customer[]>('/customers'),
@@ -99,6 +117,7 @@ export default function ContractsPage() {
 
   const open = async (id: string) => {
     setMessage('');
+    setShowCreate(false);
     setBusy('load');
     try {
       const full = await api<Contract>(`/contracts/${id}`);
@@ -181,11 +200,33 @@ export default function ContractsPage() {
         }),
       });
       setMessage(`${t.contracts.createSubmit}: ${created.number}`);
+      setShowCreate(false);
       await load();
       setSelected(created);
       setEditTiming(created.billingTiming);
-    } catch {
-      setError(t.error);
+    } catch (err) {
+      setError(apiError(err, t.error));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const runDelete = async () => {
+    if (!selected) return;
+    setBusy('delete');
+    setError('');
+    setMessage('');
+    try {
+      const qs = hardDelete ? '?hard=1' : '';
+      await api(`/contracts/${selected.id}${qs}`, { method: 'DELETE' });
+      setMessage(
+        hardDelete ? t.contracts.hardDeleteDone : t.contracts.archiveDone,
+      );
+      setConfirmOpen(false);
+      setSelected(null);
+      await load();
+    } catch (err) {
+      setError(apiError(err, t.error));
     } finally {
       setBusy('');
     }
@@ -194,129 +235,151 @@ export default function ContractsPage() {
   return (
     <AppShell>
       <PageHeader title={t.contracts.title} subtitle={t.contracts.subtitle} />
-      {error ? <p className="muted">{error}</p> : null}
+      {error ? <p className="error-msg">{error}</p> : null}
       <p className="muted" style={{ marginTop: '-0.6rem', marginBottom: '1rem' }}>
         {t.contracts.billingTimingHelp}
       </p>
+      {message && !selected ? <p className="ok-msg">{message}</p> : null}
 
-      <section className="panel" style={{ marginBottom: '1rem' }}>
-        <h2>{t.contracts.create}</h2>
-        <div className="form-grid">
-          <label className="field">
-            <span>{t.contracts.customer}</span>
-            <select
-              value={createForm.customerId}
-              onChange={(e) =>
-                setCreateForm((p) => ({ ...p, customerId: e.target.value }))
-              }
-            >
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.legalName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>{t.fleet.branch}</span>
-            <select
-              value={createForm.branchId}
-              onChange={(e) =>
-                setCreateForm((p) => ({ ...p, branchId: e.target.value }))
-              }
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.code} · {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>{t.contracts.equipment}</span>
-            <select
-              value={createForm.equipmentId}
-              onChange={(e) =>
-                setCreateForm((p) => ({ ...p, equipmentId: e.target.value }))
-              }
-            >
-              {equipment.map((eq) => (
-                <option key={eq.id} value={eq.id}>
-                  {eq.code} · {eq.brand} {eq.model}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>{t.contracts.period}</span>
-            <select
-              value={createForm.billingPeriod}
-              onChange={(e) =>
-                setCreateForm((p) => ({ ...p, billingPeriod: e.target.value }))
-              }
-            >
-              <option value="WEEKLY">{t.status.WEEKLY}</option>
-              <option value="MONTHLY">{t.status.MONTHLY}</option>
-              <option value="YEARLY">{t.status.YEARLY}</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>{t.contracts.billingTiming}</span>
-            <select
-              value={createForm.billingTiming}
-              onChange={(e) =>
-                setCreateForm((p) => ({
-                  ...p,
-                  billingTiming: e.target.value as BillingTiming,
-                }))
-              }
-            >
-              <option value="ADVANCE">{t.contracts.advance}</option>
-              <option value="ARREARS">{t.contracts.arrears}</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>{t.contracts.unitRate}</span>
-            <input
-              type="number"
-              min={0}
-              value={createForm.unitRate}
-              onChange={(e) =>
-                setCreateForm((p) => ({ ...p, unitRate: e.target.value }))
-              }
-            />
-          </label>
-          <label className="field">
-            <span>{t.contracts.dates}</span>
-            <div className="date-row">
-              <input
-                type="date"
-                value={createForm.startDate}
+      <div className="actions" style={{ marginBottom: '1rem' }}>
+        <button
+          type="button"
+          className="primary"
+          onClick={() => {
+            if (showCreate) {
+              setShowCreate(false);
+            } else {
+              setSelected(null);
+              setShowCreate(true);
+            }
+            setError('');
+            setMessage('');
+          }}
+        >
+          {showCreate ? t.contracts.cancel : t.contracts.create}
+        </button>
+      </div>
+
+      {showCreate ? (
+        <section className="panel" style={{ marginBottom: '1rem' }}>
+          <h2>{t.contracts.create}</h2>
+          <div className="form-grid">
+            <label className="field">
+              <span>{t.contracts.customer}</span>
+              <select
+                value={createForm.customerId}
                 onChange={(e) =>
-                  setCreateForm((p) => ({ ...p, startDate: e.target.value }))
+                  setCreateForm((p) => ({ ...p, customerId: e.target.value }))
+                }
+              >
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.legalName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>{t.fleet.branch}</span>
+              <select
+                value={createForm.branchId}
+                onChange={(e) =>
+                  setCreateForm((p) => ({ ...p, branchId: e.target.value }))
+                }
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.code} · {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>{t.contracts.equipment}</span>
+              <select
+                value={createForm.equipmentId}
+                onChange={(e) =>
+                  setCreateForm((p) => ({ ...p, equipmentId: e.target.value }))
+                }
+              >
+                {equipment.map((eq) => (
+                  <option key={eq.id} value={eq.id}>
+                    {eq.code} · {eq.brand} {eq.model}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>{t.contracts.period}</span>
+              <select
+                value={createForm.billingPeriod}
+                onChange={(e) =>
+                  setCreateForm((p) => ({ ...p, billingPeriod: e.target.value }))
+                }
+              >
+                <option value="WEEKLY">{t.status.WEEKLY}</option>
+                <option value="MONTHLY">{t.status.MONTHLY}</option>
+                <option value="YEARLY">{t.status.YEARLY}</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>{t.contracts.billingTiming}</span>
+              <select
+                value={createForm.billingTiming}
+                onChange={(e) =>
+                  setCreateForm((p) => ({
+                    ...p,
+                    billingTiming: e.target.value as BillingTiming,
+                  }))
+                }
+              >
+                <option value="ADVANCE">{t.contracts.advance}</option>
+                <option value="ARREARS">{t.contracts.arrears}</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>{t.contracts.unitRate}</span>
+              <input
+                type="number"
+                min={0}
+                value={createForm.unitRate}
+                onChange={(e) =>
+                  setCreateForm((p) => ({ ...p, unitRate: e.target.value }))
                 }
               />
-              <input
-                type="date"
-                value={createForm.endDate}
-                onChange={(e) =>
-                  setCreateForm((p) => ({ ...p, endDate: e.target.value }))
-                }
-              />
-            </div>
-          </label>
-        </div>
-        <div className="actions">
-          <button
-            type="button"
-            className="primary"
-            disabled={busy === 'create'}
-            onClick={createContract}
-          >
-            {t.contracts.createSubmit}
-          </button>
-        </div>
-      </section>
+            </label>
+            <label className="field">
+              <span>{t.contracts.dates}</span>
+              <div className="date-row">
+                <input
+                  type="date"
+                  value={createForm.startDate}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({ ...p, startDate: e.target.value }))
+                  }
+                />
+                <input
+                  type="date"
+                  value={createForm.endDate}
+                  onChange={(e) =>
+                    setCreateForm((p) => ({ ...p, endDate: e.target.value }))
+                  }
+                />
+              </div>
+            </label>
+          </div>
+          <div className="actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={busy === 'create'}
+              onClick={createContract}
+            >
+              {t.contracts.createSubmit}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel">
         <DataTable
@@ -384,7 +447,7 @@ export default function ContractsPage() {
           {selected.notes ? <p className="muted">{selected.notes}</p> : null}
 
           <label className="field">
-            <span>{t.contracts.editTiming}</span>
+            <span>{t.contracts.billingTiming}</span>
             <select
               value={editTiming}
               onChange={(e) => setEditTiming(e.target.value as BillingTiming)}
@@ -412,11 +475,50 @@ export default function ContractsPage() {
             >
               {t.contracts.generateInvoice}
             </button>
+            {master ? (
+              <button
+                type="button"
+                className="ghost danger-btn"
+                onClick={() => {
+                  setHardDelete(selected.status === 'DRAFT');
+                  setConfirmOpen(true);
+                }}
+              >
+                {selected.status === 'DRAFT'
+                  ? t.contracts.hardDelete
+                  : t.contracts.archive}
+              </button>
+            ) : null}
           </div>
           {message ? <p className="ok-msg">{message}</p> : null}
         </section>
       ) : null}
-      {!selected && message ? <p className="ok-msg">{message}</p> : null}
+
+      <ConfirmDialog
+        open={confirmOpen && Boolean(selected)}
+        title={t.masterDelete.title}
+        entityLabel={selected?.number ?? ''}
+        message={t.masterDelete.contractMsg}
+        confirmLabel={
+          hardDelete ? t.contracts.hardDelete : t.contracts.archive
+        }
+        cancelLabel={t.masterDelete.cancel}
+        busy={busy === 'delete'}
+        onConfirm={runDelete}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        <label
+          className="field"
+          style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+        >
+          <input
+            type="checkbox"
+            checked={hardDelete}
+            onChange={(e) => setHardDelete(e.target.checked)}
+          />
+          <span>{t.masterDelete.hardOption}</span>
+        </label>
+      </ConfirmDialog>
     </AppShell>
   );
 }

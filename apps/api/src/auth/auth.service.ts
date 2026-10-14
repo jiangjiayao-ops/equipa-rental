@@ -24,6 +24,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       name: user.name,
+      isMasterAdmin: user.isMasterAdmin,
     });
     return {
       accessToken,
@@ -34,6 +35,7 @@ export class AuthService {
         role: user.role,
         phone: user.phone,
         whatsapp: user.whatsapp,
+        isMasterAdmin: user.isMasterAdmin,
       },
     };
   }
@@ -48,6 +50,7 @@ export class AuthService {
         role: true,
         phone: true,
         whatsapp: true,
+        isMasterAdmin: true,
         organizationId: true,
         active: true,
       },

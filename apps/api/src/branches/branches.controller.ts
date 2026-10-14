@@ -10,7 +10,9 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { IsOptional, IsString, MinLength } from 'class-validator';
+import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { MasterAdminGuard } from '../auth/master-admin.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { BranchesService } from './branches.service';
@@ -113,9 +115,11 @@ export class BranchesController {
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN)
-  remove(@Param('id') id: string) {
-    return this.branches.remove(id);
+  @UseGuards(MasterAdminGuard)
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.branches.remove(id, {
+      userId: user.userId,
+      email: user.email,
+    });
   }
 }

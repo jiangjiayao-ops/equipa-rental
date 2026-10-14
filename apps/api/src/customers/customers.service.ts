@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type CreateCustomerInput = {
@@ -22,10 +23,14 @@ export type CreateCustomerInput = {
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   list() {
     return this.prisma.customer.findMany({
+      where: { deletedAt: null },
       include: {
         contacts: true,
         sites: true,
@@ -112,8 +117,80 @@ export class CustomersService {
 
   async getOrThrow(id: string) {
     const customer = await this.get(id);
-    if (!customer) throw new NotFoundException('Cliente não encontrado');
+    if (!customer || customer.deletedAt) {
+      throw new NotFoundException('Cliente não encontrado');
+    }
     return customer;
+  }
+
+  async remove(
+    id: string,
+    actor: { userId: string; email: string },
+    hard = false,
+  ) {
+    const customer = await this.getOrThrow(id);
+    const openProps = await this.prisma.proposal.count({
+      where: {
+        customerId: id,
+        deletedAt: null,
+        status: { in: ['DRAFT', 'SENT', 'ACCEPTED'] },
+      },
+    });
+    const openContracts = await this.prisma.contract.count({
+      where: {
+        customerId: id,
+        deletedAt: null,
+        status: { in: ['DRAFT', 'ACTIVE', 'SUSPENDED'] },
+      },
+    });
+
+    if (hard) {
+      if (openProps || openContracts) {
+        throw new BadRequestException(
+          'Exclusão permanente bloqueada: ainda há propostas ou contratos ativos. Use arquivar.',
+        );
+      }
+      const anyHistory = await this.prisma.contract.count({
+        where: { customerId: id },
+      });
+      if (anyHistory) {
+        throw new BadRequestException(
+          'Cliente possui histórico de contratos — use arquivar (soft-delete).',
+        );
+      }
+      await this.prisma.$transaction(async (tx) => {
+        await tx.customerContact.deleteMany({ where: { customerId: id } });
+        await tx.customerSite.deleteMany({ where: { customerId: id } });
+        await tx.customer.delete({ where: { id } });
+      });
+      await this.audit.log({
+        actorId: actor.userId,
+        actorEmail: actor.email,
+        action: 'DELETE_HARD',
+        entityType: 'Customer',
+        entityId: id,
+        entityLabel: customer.legalName,
+      });
+      return { ok: true, mode: 'hard' as const, id, label: customer.legalName };
+    }
+
+    await this.prisma.customer.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    await this.audit.log({
+      actorId: actor.userId,
+      actorEmail: actor.email,
+      action: 'DELETE_SOFT',
+      entityType: 'Customer',
+      entityId: id,
+      entityLabel: customer.legalName,
+      detail:
+        openProps || openContracts
+          ? `archived with ${openProps} open proposals / ${openContracts} open contracts`
+          : 'archived',
+    });
+    return { ok: true, mode: 'soft' as const, id, label: customer.legalName };
   }
 
   async update(id: string, input: CreateCustomerInput) {

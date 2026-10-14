@@ -274,6 +274,7 @@ async function ensureOrgStructure() {
         phone: '(11) 98888-0001',
         whatsapp: '5511988880001',
         role: Role.ADMIN,
+        isMasterAdmin: true,
       },
     });
   } else {
@@ -283,12 +284,18 @@ async function ensureOrgStructure() {
         passwordHash,
         role: Role.ADMIN,
         active: true,
+        isMasterAdmin: true,
         organizationId: org.id,
         phone: admin.phone ?? '(11) 98888-0001',
         whatsapp: admin.whatsapp ?? '5511988880001',
       },
     });
   }
+  // Ensure no other user is master admin
+  await prisma.user.updateMany({
+    where: { email: { not: 'admin@equipa.com.br' }, isMasterAdmin: true },
+    data: { isMasterAdmin: false },
+  });
 
   return { org, branch };
 }

@@ -25,6 +25,7 @@ enum EquipmentStatus {
   QUARANTINE
   SOLD
   RETIRED
+  UNAVAILABLE
 }
 
 enum BillingPeriod {
@@ -47,6 +48,7 @@ enum ProposalStatus {
   ACCEPTED
   REJECTED
   EXPIRED
+  CANCELLED
 }
 
 enum ProposalSendChannel {
@@ -177,10 +179,27 @@ model User {
   /// WhatsApp number (digits with country code preferred, e.g. 5511987654321)
   whatsapp       String?
   role           Role         @default(READ_ONLY)
+  /// Platform owner only — hard/soft delete of obsolete records. Seed: admin@equipa.com.br
+  isMasterAdmin  Boolean      @default(false)
   active         Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   ownedProposals Proposal[]   @relation("ProposalOwner")
+  auditLogs      AuditLog[]
+}
+
+/// Master-admin destructive actions (soft/hard delete, retire).
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?
+  actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail  String?
+  action      String
+  entityType  String
+  entityId    String
+  entityLabel String?
+  detail      String?
+  createdAt   DateTime @default(now())
 }
 
 model Customer {
@@ -193,6 +212,8 @@ model Customer {
   phone        String?
   city         String?
   state        String?
+  /// Soft-archive; hidden from default lists when set.
+  deletedAt    DateTime?
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   contacts     CustomerContact[]
@@ -251,6 +272,8 @@ model Equipment {
   hourMeter       Float             @default(0)
   status          EquipmentStatus   @default(AVAILABLE)
   notes           String?
+  /// Soft-archive (sold/retired/unavailable); hidden from active fleet when set.
+  deletedAt       DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   proposalLines   ProposalLine[]
@@ -306,6 +329,8 @@ model Proposal {
   acceptedOption   ProposalOption?        @relation("AcceptedOption", fields: [acceptedOptionId], references: [id])
   sentAt           DateTime?
   acceptedAt       DateTime?
+  /// Soft-archive; hidden from default lists when set.
+  deletedAt        DateTime?
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
   lines            ProposalLine[]
@@ -379,6 +404,8 @@ model Contract {
   endDate       DateTime
   depositAmount Float            @default(0)
   notes         String?
+  /// Soft-archive; hidden from default lists when set.
+  deletedAt     DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   lines         ContractLine[]

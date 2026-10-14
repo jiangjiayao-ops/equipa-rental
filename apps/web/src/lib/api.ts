@@ -11,6 +11,7 @@ export function setToken(token: string | null) {
   else {
     window.localStorage.removeItem('equipa_token');
     window.localStorage.removeItem('equipa_role');
+    window.localStorage.removeItem('equipa_master_admin');
   }
 }
 
@@ -18,6 +19,12 @@ export function setUserRole(role: string | null) {
   if (typeof window === 'undefined') return;
   if (role) window.localStorage.setItem('equipa_role', role);
   else window.localStorage.removeItem('equipa_role');
+}
+
+export function setMasterAdmin(flag: boolean | null) {
+  if (typeof window === 'undefined') return;
+  if (flag) window.localStorage.setItem('equipa_master_admin', '1');
+  else window.localStorage.removeItem('equipa_master_admin');
 }
 
 export function getUserRole(): string | null {
@@ -36,6 +43,25 @@ export function getUserRole(): string | null {
     /* ignore */
   }
   return null;
+}
+
+export function isMasterAdmin(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (window.localStorage.getItem('equipa_master_admin') === '1') return true;
+  const token = getToken();
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1] ?? '')) as {
+      isMasterAdmin?: boolean;
+    };
+    if (payload.isMasterAdmin) {
+      window.localStorage.setItem('equipa_master_admin', '1');
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {

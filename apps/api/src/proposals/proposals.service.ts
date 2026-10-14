@@ -13,6 +13,7 @@ import {
   ProposalStatus,
 } from '@prisma/client';
 import { randomBytes } from 'crypto';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotifyService } from './notify.service';
 
@@ -59,6 +60,7 @@ export class ProposalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notify: NotifyService,
+    private readonly audit: AuditService,
   ) {}
 
   private includeAll() {
@@ -114,6 +116,7 @@ export class ProposalsService {
 
   list() {
     return this.prisma.proposal.findMany({
+      where: { deletedAt: null },
       include: this.includeAll(),
       orderBy: { number: 'desc' },
     });
@@ -124,8 +127,66 @@ export class ProposalsService {
       where: { id },
       include: this.includeAll(),
     });
-    if (!proposal) throw new NotFoundException('Proposta não encontrada');
+    if (!proposal || proposal.deletedAt) {
+      throw new NotFoundException('Proposta não encontrada');
+    }
     return proposal;
+  }
+
+  async remove(
+    id: string,
+    actor: { userId: string; email: string },
+    hard = false,
+  ) {
+    const proposal = await this.get(id);
+    const contractCount = await this.prisma.contract.count({
+      where: { proposalId: id, deletedAt: null },
+    });
+
+    if (hard) {
+      if (proposal.status !== ProposalStatus.DRAFT || contractCount > 0) {
+        throw new BadRequestException(
+          'Exclusão permanente só para rascunhos sem contrato. Use arquivar.',
+        );
+      }
+      await this.prisma.$transaction(async (tx) => {
+        await tx.proposalSendAttempt.deleteMany({ where: { proposalId: id } });
+        await tx.proposalOption.deleteMany({ where: { proposalId: id } });
+        await tx.proposalLine.deleteMany({ where: { proposalId: id } });
+        await tx.proposal.delete({ where: { id } });
+      });
+      await this.audit.log({
+        actorId: actor.userId,
+        actorEmail: actor.email,
+        action: 'DELETE_HARD',
+        entityType: 'Proposal',
+        entityId: id,
+        entityLabel: proposal.number,
+      });
+      return { ok: true, mode: 'hard' as const, id, label: proposal.number };
+    }
+
+    await this.prisma.proposal.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        status:
+          proposal.status === ProposalStatus.DRAFT
+            ? ProposalStatus.CANCELLED
+            : proposal.status === ProposalStatus.SENT
+              ? ProposalStatus.CANCELLED
+              : proposal.status,
+      },
+    });
+    await this.audit.log({
+      actorId: actor.userId,
+      actorEmail: actor.email,
+      action: 'DELETE_SOFT',
+      entityType: 'Proposal',
+      entityId: id,
+      entityLabel: proposal.number,
+    });
+    return { ok: true, mode: 'soft' as const, id, label: proposal.number };
   }
 
   async getByPublicToken(token: string) {
@@ -153,7 +214,9 @@ export class ProposalsService {
         contracts: { select: { id: true, number: true, status: true } },
       },
     });
-    if (!proposal) throw new NotFoundException('Proposta não encontrada');
+    if (!proposal || proposal.deletedAt) {
+      throw new NotFoundException('Proposta não encontrada');
+    }
     if (
       proposal.validUntil &&
       proposal.validUntil < new Date() &&

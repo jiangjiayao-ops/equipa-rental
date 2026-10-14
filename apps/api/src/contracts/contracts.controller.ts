@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { BillingPeriod, BillingTiming, ContractStatus } from '@prisma/client';
 import {
   IsArray,
@@ -10,7 +20,9 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { MasterAdminGuard } from '../auth/master-admin.guard';
 import { ContractsService } from './contracts.service';
 
 class ContractLineDto {
@@ -125,7 +137,7 @@ export class ContractsController {
 
   @Get(':id')
   get(@Param('id') id: string) {
-    return this.contracts.get(id);
+    return this.contracts.getOrThrow(id);
   }
 
   @Post()
@@ -141,5 +153,19 @@ export class ContractsController {
   @Post(':id/renew')
   renew(@Param('id') id: string, @Body() body: RenewDto) {
     return this.contracts.renewWithPeriodChange(id, body.toPeriod, body.newEndDate);
+  }
+
+  @Delete(':id')
+  @UseGuards(MasterAdminGuard)
+  remove(
+    @Param('id') id: string,
+    @Query('hard') hard: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.contracts.remove(
+      id,
+      { userId: user.userId, email: user.email },
+      hard === '1' || hard === 'true',
+    );
   }
 }

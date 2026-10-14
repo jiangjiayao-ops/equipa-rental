@@ -98,6 +98,13 @@ export const dictionaries = {
       updated: 'Máquina atualizada',
       codeHint: 'Opcional — gerado automaticamente se vazio (ex.: EQ-0042).',
       make: 'Marca (fabricante)',
+      retire: 'Retirar da frota',
+      retireDone: 'Equipamento retirado da frota ativa',
+      modeSold: 'Vendido',
+      modeRetired: 'Baixado / aposentado',
+      modeUnavailable: 'Indisponível',
+      modeHard: 'Excluir permanente (nunca usado)',
+      hardDeleteDone: 'Equipamento excluído',
     },
     calendar: {
       title: 'Agenda',
@@ -137,6 +144,10 @@ export const dictionaries = {
       updated: 'Cliente atualizado',
       detail: 'Detalhe do cliente',
       close: 'Fechar',
+      archive: 'Arquivar cliente',
+      archiveDone: 'Cliente arquivado',
+      hardDelete: 'Excluir permanente',
+      hardDeleteDone: 'Cliente excluído',
     },
     proposals: {
       title: 'Propostas',
@@ -205,6 +216,10 @@ export const dictionaries = {
       contactBlock: 'Contato Equipa',
       openWhatsApp: 'Abrir WhatsApp',
       emailLink: 'Enviar e-mail',
+      archive: 'Arquivar / cancelar',
+      archiveDone: 'Proposta arquivada',
+      hardDelete: 'Excluir rascunho',
+      hardDeleteDone: 'Proposta excluída',
     },
     publicProposal: {
       title: 'Proposta comercial',
@@ -246,8 +261,13 @@ export const dictionaries = {
       close: 'Fechar',
       create: 'Novo contrato',
       createSubmit: 'Criar contrato',
+      cancel: 'Cancelar',
       equipment: 'Equipamento',
       unitRate: 'Taxa unitária',
+      archive: 'Arquivar / cancelar',
+      archiveDone: 'Contrato arquivado',
+      hardDelete: 'Excluir rascunho',
+      hardDeleteDone: 'Contrato excluído',
     },
     operations: {
       title: 'Operações',
@@ -310,6 +330,26 @@ export const dictionaries = {
       deleteBlocked: 'Remoção bloqueada',
       requiredHint: 'Obrigatório: código, nome do pátio, cidade e UF.',
       cancel: 'Cancelar',
+      masterOnlyDelete: 'Somente o master admin pode remover filiais.',
+      showOrg: 'Ver organização',
+      hideOrg: 'Ocultar organização',
+    },
+    masterDelete: {
+      title: 'Confirmar exclusão',
+      confirm: 'Confirmar',
+      cancel: 'Cancelar',
+      hardOption: 'Exclusão permanente (somente se seguro)',
+      customerMsg:
+        'Arquivar remove o cliente das listas. Exclusão permanente só sem histórico de contratos.',
+      proposalMsg:
+        'Arquivar cancela/oculta a proposta. Exclusão permanente só para rascunhos sem contrato.',
+      contractMsg:
+        'Arquivar cancela/oculta o contrato. Exclusão permanente só para rascunhos sem faturas.',
+      equipmentMsg:
+        'Retira da frota ativa (vendido / baixado / indisponível). Exclusão permanente só se nunca usado.',
+      branchMsg:
+        'Exclusão permanente. Bloqueada se for a última filial ou houver vínculos (equipamentos, contratos, propostas…).',
+      onlyMaster: 'Ação restrita ao master administrador.',
     },
     status: {
       AVAILABLE: 'Disponível',
@@ -320,6 +360,7 @@ export const dictionaries = {
       QUARANTINE: 'Quarentena',
       SOLD: 'Vendido',
       RETIRED: 'Baixado',
+      UNAVAILABLE: 'Indisponível',
       WEEKLY: 'Semanal',
       MONTHLY: 'Mensal',
       YEARLY: 'Anual',
@@ -428,6 +469,13 @@ export const dictionaries = {
       updated: 'Machine updated',
       codeHint: 'Optional — auto-generated if empty (e.g. EQ-0042).',
       make: 'Make (brand)',
+      retire: 'Remove from fleet',
+      retireDone: 'Equipment removed from active fleet',
+      modeSold: 'Sold',
+      modeRetired: 'Retired',
+      modeUnavailable: 'Unavailable',
+      modeHard: 'Hard delete (never used)',
+      hardDeleteDone: 'Equipment deleted',
     },
     calendar: {
       title: 'Calendar',
@@ -467,6 +515,10 @@ export const dictionaries = {
       updated: 'Customer updated',
       detail: 'Customer detail',
       close: 'Close',
+      archive: 'Archive customer',
+      archiveDone: 'Customer archived',
+      hardDelete: 'Hard delete',
+      hardDeleteDone: 'Customer deleted',
     },
     proposals: {
       title: 'Proposals',
@@ -535,6 +587,10 @@ export const dictionaries = {
       contactBlock: 'Equipa contact',
       openWhatsApp: 'Open WhatsApp',
       emailLink: 'Send email',
+      archive: 'Archive / cancel',
+      archiveDone: 'Proposal archived',
+      hardDelete: 'Delete draft',
+      hardDeleteDone: 'Proposal deleted',
     },
     publicProposal: {
       title: 'Commercial proposal',
@@ -576,8 +632,13 @@ export const dictionaries = {
       close: 'Close',
       create: 'New contract',
       createSubmit: 'Create contract',
+      cancel: 'Cancel',
       equipment: 'Equipment',
       unitRate: 'Unit rate',
+      archive: 'Archive / cancel',
+      archiveDone: 'Contract archived',
+      hardDelete: 'Delete draft',
+      hardDeleteDone: 'Contract deleted',
     },
     operations: {
       title: 'Operations',
@@ -640,6 +701,26 @@ export const dictionaries = {
       deleteBlocked: 'Delete blocked',
       requiredHint: 'Required: code, site name, city, and state.',
       cancel: 'Cancel',
+      masterOnlyDelete: 'Only the master admin can remove branches.',
+      showOrg: 'Show organization',
+      hideOrg: 'Hide organization',
+    },
+    masterDelete: {
+      title: 'Confirm deletion',
+      confirm: 'Confirm',
+      cancel: 'Cancel',
+      hardOption: 'Hard delete (only when safe)',
+      customerMsg:
+        'Archive hides the customer from lists. Hard delete only when there is no contract history.',
+      proposalMsg:
+        'Archive cancels/hides the proposal. Hard delete only for drafts with no contract.',
+      contractMsg:
+        'Archive cancels/hides the contract. Hard delete only for drafts with no invoices.',
+      equipmentMsg:
+        'Removes from active fleet (sold / retired / unavailable). Hard delete only if never used.',
+      branchMsg:
+        'Hard delete. Blocked if it is the last branch or still linked (equipment, contracts, proposals…).',
+      onlyMaster: 'Restricted to the master administrator.',
     },
     status: {
       AVAILABLE: 'Available',
@@ -650,6 +731,7 @@ export const dictionaries = {
       QUARANTINE: 'Quarantine',
       SOLD: 'Sold',
       RETIRED: 'Retired',
+      UNAVAILABLE: 'Unavailable',
       WEEKLY: 'Weekly',
       MONTHLY: 'Monthly',
       YEARLY: 'Yearly',

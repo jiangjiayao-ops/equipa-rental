@@ -5,6 +5,7 @@ export type AuthUser = {
   email: string;
   role: string;
   name: string;
+  isMasterAdmin?: boolean;
 };
 
 export const CurrentUser = createParamDecorator(

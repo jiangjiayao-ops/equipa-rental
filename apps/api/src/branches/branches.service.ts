@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ContractStatus } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type BranchProfileInput = {
@@ -38,7 +39,10 @@ const OPEN_CONTRACT_STATUSES: ContractStatus[] = [
 
 @Injectable()
 export class BranchesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   list() {
     return this.prisma.branch.findMany({
@@ -189,7 +193,10 @@ export class BranchesService {
    * proposals, calendar blocks, mobilizations, or transfers.
    * Also refuses deleting the organization's last branch.
    */
-  async remove(id: string) {
+  async remove(
+    id: string,
+    actor?: { userId: string; email: string },
+  ) {
     const branch = await this.get(id);
 
     const totalBranches = await this.prisma.branch.count({
@@ -230,6 +237,16 @@ export class BranchesService {
     }
 
     await this.prisma.branch.delete({ where: { id } });
-    return { ok: true, id, code: branch.code };
+    if (actor) {
+      await this.audit.log({
+        actorId: actor.userId,
+        actorEmail: actor.email,
+        action: 'DELETE_HARD',
+        entityType: 'Branch',
+        entityId: id,
+        entityLabel: branch.code,
+      });
+    }
+    return { ok: true, mode: 'hard' as const, id, label: branch.code };
   }
 }

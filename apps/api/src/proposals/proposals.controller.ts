@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -29,6 +30,7 @@ import {
 import type { Response } from 'express';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { MasterAdminGuard } from '../auth/master-admin.guard';
 import { ProposalPdfService } from './proposal-pdf.service';
 import { ProposalsService } from './proposals.service';
 
@@ -232,6 +234,20 @@ export class ProposalsController {
   @Post()
   create(@Body() body: CreateProposalDto, @CurrentUser() user: AuthUser) {
     return this.proposals.create(body, user.userId);
+  }
+
+  @Delete(':id')
+  @UseGuards(MasterAdminGuard)
+  remove(
+    @Param('id') id: string,
+    @Query('hard') hard: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.proposals.remove(
+      id,
+      { userId: user.userId, email: user.email },
+      hard === '1' || hard === 'true',
+    );
   }
 
   @Patch(':id')

@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { api, downloadApiFile, formatBrl } from '@/lib/api';
+import { api, downloadApiFile, formatBrl, isMasterAdmin } from '@/lib/api';
 import { whatsappDeepLink } from '@/lib/whatsapp';
 
 type BillingTiming = 'ADVANCE' | 'ARREARS';
@@ -154,6 +155,9 @@ function ProposalsPageInner() {
   const [selectedMachines, setSelectedMachines] = useState<Equipment[]>([]);
   const [hoursMode, setHoursMode] = useState<HoursMode>('default');
   const [customHours, setCustomHours] = useState(200);
+  const [master, setMaster] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [hardDelete, setHardDelete] = useState(false);
 
   const [form, setForm] = useState({
     customerId: '',
@@ -226,6 +230,7 @@ function ProposalsPageInner() {
   };
 
   useEffect(() => {
+    setMaster(isMasterAdmin());
     load();
   }, [t.error]);
 
@@ -478,6 +483,27 @@ function ProposalsPageInner() {
     if (!publicUrl) return;
     await navigator.clipboard.writeText(publicUrl);
     setMessage(t.proposals.copyLink);
+  };
+
+  const runDelete = async () => {
+    if (!selected) return;
+    setBusy('delete');
+    setError('');
+    setMessage('');
+    try {
+      const qs = hardDelete ? '?hard=1' : '';
+      await api(`/proposals/${selected.id}${qs}`, { method: 'DELETE' });
+      setMessage(
+        hardDelete ? t.proposals.hardDeleteDone : t.proposals.archiveDone,
+      );
+      setConfirmOpen(false);
+      setSelected(null);
+      await load();
+    } catch (err) {
+      setError(apiError(err, t.error));
+    } finally {
+      setBusy('');
+    }
   };
 
   const updateOption = (idx: number, patch: Partial<Option>) => {
@@ -1032,6 +1058,20 @@ function ProposalsPageInner() {
                 {t.proposals.copyLink}
               </button>
             ) : null}
+            {master ? (
+              <button
+                type="button"
+                className="ghost danger-btn"
+                onClick={() => {
+                  setHardDelete(selected.status === 'DRAFT');
+                  setConfirmOpen(true);
+                }}
+              >
+                {selected.status === 'DRAFT'
+                  ? t.proposals.hardDelete
+                  : t.proposals.archive}
+              </button>
+            ) : null}
           </div>
 
           {publicUrl ? (
@@ -1076,6 +1116,32 @@ function ProposalsPageInner() {
           ) : null}
         </section>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmOpen && Boolean(selected)}
+        title={t.masterDelete.title}
+        entityLabel={selected?.number ?? ''}
+        message={t.masterDelete.proposalMsg}
+        confirmLabel={
+          hardDelete ? t.proposals.hardDelete : t.proposals.archive
+        }
+        cancelLabel={t.masterDelete.cancel}
+        busy={busy === 'delete'}
+        onConfirm={runDelete}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        <label
+          className="field"
+          style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+        >
+          <input
+            type="checkbox"
+            checked={hardDelete}
+            onChange={(e) => setHardDelete(e.target.checked)}
+          />
+          <span>{t.masterDelete.hardOption}</span>
+        </label>
+      </ConfirmDialog>
     </AppShell>
   );
 }

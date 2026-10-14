@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { api } from '@/lib/api';
+import { api, isMasterAdmin } from '@/lib/api';
 import {
   formatCep,
   formatCpfOrCnpj,
@@ -154,9 +155,15 @@ export default function CustomersPage() {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<CustomerForm>(emptyForm);
   const [sort, setSort] = useState<SortKey>('newest');
+  const [master, setMaster] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [hardDelete, setHardDelete] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [pendingLabel, setPendingLabel] = useState('');
 
   useEffect(() => {
     setSort(readStoredSort());
+    setMaster(isMasterAdmin());
   }, []);
 
   const load = async () => {
@@ -249,6 +256,38 @@ export default function CustomersPage() {
 
   const openNewProposal = (customerId: string) => {
     router.push(`/propostas?customerId=${encodeURIComponent(customerId)}&new=1`);
+  };
+
+  const askDelete = (c: Customer) => {
+    setPendingId(c.id);
+    setPendingLabel(c.legalName);
+    setHardDelete(false);
+    setConfirmOpen(true);
+  };
+
+  const runDelete = async () => {
+    if (!pendingId) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const qs = hardDelete ? '?hard=1' : '';
+      await api(`/customers/${pendingId}${qs}`, { method: 'DELETE' });
+      setMessage(
+        hardDelete ? t.customers.hardDeleteDone : t.customers.archiveDone,
+      );
+      setConfirmOpen(false);
+      if (selected?.id === pendingId) {
+        setSelected(null);
+        setEditing(false);
+      }
+      setPendingId(null);
+      await load();
+    } catch (err) {
+      setError(apiError(err, t.error));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const formFields = (disabled: boolean) => (
@@ -464,6 +503,15 @@ export default function CustomersPage() {
               >
                 {t.customers.newProposal}
               </button>
+              {master ? (
+                <button
+                  type="button"
+                  className="ghost danger-btn"
+                  onClick={() => askDelete(c)}
+                >
+                  {t.customers.archive}
+                </button>
+              ) : null}
             </div>,
           ])}
         />
@@ -532,11 +580,43 @@ export default function CustomersPage() {
                 >
                   {t.customers.newProposal}
                 </button>
+                {master ? (
+                  <button
+                    type="button"
+                    className="ghost danger-btn"
+                    onClick={() => askDelete(selected)}
+                  >
+                    {t.customers.archive}
+                  </button>
+                ) : null}
               </div>
             </>
           )}
         </section>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t.masterDelete.title}
+        entityLabel={pendingLabel}
+        message={t.masterDelete.customerMsg}
+        confirmLabel={
+          hardDelete ? t.customers.hardDelete : t.customers.archive
+        }
+        cancelLabel={t.masterDelete.cancel}
+        busy={busy}
+        onConfirm={runDelete}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        <label className="field" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <input
+            type="checkbox"
+            checked={hardDelete}
+            onChange={(e) => setHardDelete(e.target.checked)}
+          />
+          <span>{t.masterDelete.hardOption}</span>
+        </label>
+      </ConfirmDialog>
     </AppShell>
   );
 }

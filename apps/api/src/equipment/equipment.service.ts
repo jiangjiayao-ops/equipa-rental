@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EquipmentStatus } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type UpsertEquipmentInput = {
@@ -27,11 +28,15 @@ const STATUSES = new Set(Object.values(EquipmentStatus));
 
 @Injectable()
 export class EquipmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   list(branchId?: string, availableOnly = false) {
     return this.prisma.equipment.findMany({
       where: {
+        deletedAt: null,
         ...(branchId ? { branchId } : {}),
         ...(availableOnly ? { status: EquipmentStatus.AVAILABLE } : {}),
       },
@@ -63,8 +68,78 @@ export class EquipmentService {
 
   async getOrThrow(id: string) {
     const equipment = await this.get(id);
-    if (!equipment) throw new NotFoundException('Equipamento não encontrado');
+    if (!equipment || equipment.deletedAt) {
+      throw new NotFoundException('Equipamento não encontrado');
+    }
     return equipment;
+  }
+
+  /**
+   * mode: sold | retired | unavailable (soft) | hard
+   * Soft sets status + deletedAt (hidden from active fleet).
+   */
+  async remove(
+    id: string,
+    actor: { userId: string; email: string },
+    mode: 'sold' | 'retired' | 'unavailable' | 'hard' = 'retired',
+  ) {
+    const equipment = await this.getOrThrow(id);
+
+    if (mode === 'hard') {
+      const used =
+        (await this.prisma.proposalLine.count({
+          where: { equipmentId: id },
+        })) +
+        (await this.prisma.contractLine.count({
+          where: { equipmentId: id },
+        }));
+      if (used > 0) {
+        throw new BadRequestException(
+          'Exclusão permanente bloqueada: equipamento já usado em propostas/contratos. Use sold/retired.',
+        );
+      }
+      await this.prisma.$transaction(async (tx) => {
+        await tx.meterReading.deleteMany({ where: { equipmentId: id } });
+        await tx.equipment.delete({ where: { id } });
+      });
+      await this.audit.log({
+        actorId: actor.userId,
+        actorEmail: actor.email,
+        action: 'DELETE_HARD',
+        entityType: 'Equipment',
+        entityId: id,
+        entityLabel: equipment.code,
+      });
+      return { ok: true, mode: 'hard' as const, id, label: equipment.code };
+    }
+
+    const status =
+      mode === 'sold'
+        ? EquipmentStatus.SOLD
+        : mode === 'unavailable'
+          ? EquipmentStatus.UNAVAILABLE
+          : EquipmentStatus.RETIRED;
+
+    await this.prisma.equipment.update({
+      where: { id },
+      data: { status, deletedAt: new Date() },
+    });
+    await this.audit.log({
+      actorId: actor.userId,
+      actorEmail: actor.email,
+      action: 'RETIRE',
+      entityType: 'Equipment',
+      entityId: id,
+      entityLabel: equipment.code,
+      detail: `mode=${mode} status=${status}`,
+    });
+    return {
+      ok: true,
+      mode: mode as 'sold' | 'retired' | 'unavailable',
+      id,
+      label: equipment.code,
+      status,
+    };
   }
 
   private async nextCode() {

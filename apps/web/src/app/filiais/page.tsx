@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
-import { api, getUserRole } from '@/lib/api';
+import { api, getUserRole, isMasterAdmin } from '@/lib/api';
 import {
   formatCep,
   formatCnpj,
@@ -128,12 +129,15 @@ function apiErrorMessage(err: unknown, fallback: string) {
 export default function BranchesPage() {
   const { t } = useLocale();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [master, setMaster] = useState(false);
   const [org, setOrg] = useState<OrgForm | null>(null);
   const [branches, setBranches] = useState<BranchForm[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [branch, setBranch] = useState<BranchForm | null>(null);
   const [createForm, setCreateForm] = useState<CreateForm>(emptyCreate);
   const [showCreate, setShowCreate] = useState(false);
+  const [showOrg, setShowOrg] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState('');
@@ -174,6 +178,7 @@ export default function BranchesPage() {
 
   useEffect(() => {
     setIsAdmin(getUserRole() === 'ADMIN');
+    setMaster(isMasterAdmin());
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t.error]);
@@ -298,14 +303,14 @@ export default function BranchesPage() {
   };
 
   const deleteBranch = async () => {
-    if (!branch || !isAdmin) return;
-    if (!window.confirm(t.branchesPage.deleteConfirm)) return;
+    if (!branch || !master) return;
     setBusy('delete');
     setMessage('');
     setError('');
     try {
       await api<{ ok: boolean }>(`/branches/${branch.id}`, { method: 'DELETE' });
       setMessage(`${t.branchesPage.deleteBranch}: ${branch.code}`);
+      setConfirmOpen(false);
       setSelectedId('');
       setBranch(null);
       await load();
@@ -325,207 +330,221 @@ export default function BranchesPage() {
       {!isAdmin ? <p className="muted">{t.branchesPage.adminOnly}</p> : null}
       {message ? <p className="ok-msg">{message}</p> : null}
 
-      <section className="panel" style={{ marginBottom: '1rem' }}>
-        <h2>{t.branchesPage.orgTitle}</h2>
-        <p className="muted">{t.branchesPage.orgHelp}</p>
-        {org ? (
-          <>
-            <div className="form-grid">
-              <Field
-                label={t.branchesPage.legalName}
-                value={org.name}
-                disabled={!isAdmin}
-                onChange={(v) => setOrg({ ...org, name: v })}
-              />
-              <Field
-                label={t.branchesPage.tradeName}
-                value={org.tradeName ?? ''}
-                disabled={!isAdmin}
-                onChange={(v) => setOrg({ ...org, tradeName: v })}
-              />
-              <Field
-                label={t.branchesPage.cnpj}
-                value={org.cnpj}
-                disabled={!isAdmin}
-                format={formatCnpj}
-                onChange={(v) => setOrg({ ...org, cnpj: v })}
-              />
-              <Field
-                label={t.branchesPage.ie}
-                value={org.ie ?? ''}
-                disabled={!isAdmin}
-                onChange={(v) => setOrg({ ...org, ie: v })}
-              />
-              <Field
-                label={t.branchesPage.im}
-                value={org.im ?? ''}
-                disabled={!isAdmin}
-                onChange={(v) => setOrg({ ...org, im: v })}
-              />
-              <Field
-                label={t.branchesPage.street}
-                value={org.street ?? ''}
-                disabled={!isAdmin}
-                onChange={(v) => setOrg({ ...org, street: v })}
-              />
-              <Field
-                label={t.branchesPage.city}
-                value={org.city ?? ''}
-                disabled={!isAdmin}
-                onChange={(v) => setOrg({ ...org, city: v })}
-              />
-              <Field
-                label={t.branchesPage.state}
-                value={org.state ?? ''}
-                disabled={!isAdmin}
-                onChange={(v) => setOrg({ ...org, state: v.toUpperCase().slice(0, 2) })}
-              />
-              <Field
-                label={t.branchesPage.cep}
-                value={org.cep ?? ''}
-                disabled={!isAdmin}
-                format={formatCep}
-                onChange={(v) => setOrg({ ...org, cep: v })}
-              />
-              <Field
-                label={t.branchesPage.phone}
-                value={org.phone ?? ''}
-                disabled={!isAdmin}
-                format={formatPhoneBr}
-                onChange={(v) => setOrg({ ...org, phone: v })}
-              />
-              <Field
-                label={t.branchesPage.email}
-                value={org.email ?? ''}
-                disabled={!isAdmin}
-                onChange={(v) => setOrg({ ...org, email: v })}
-              />
-            </div>
-            {isAdmin ? (
-              <div className="actions">
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={busy === 'org'}
-                  onClick={saveOrg}
-                >
-                  {t.branchesPage.save}
-                </button>
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <p className="muted">{t.loading}</p>
-        )}
-      </section>
+      <div
+        className="actions"
+        style={{ marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}
+      >
+        {isAdmin ? (
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              setShowCreate((v) => !v);
+              if (!showCreate) setShowOrg(false);
+              setError('');
+            }}
+          >
+            {showCreate ? t.branchesPage.cancel : t.branchesPage.addBranch}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setShowOrg((v) => !v)}
+        >
+          {showOrg ? t.branchesPage.hideOrg : t.branchesPage.showOrg}
+        </button>
+      </div>
 
-      {isAdmin ? (
+      {showOrg ? (
         <section className="panel" style={{ marginBottom: '1rem' }}>
-          <div className="detail-head">
-            <h2>{t.branchesPage.addBranch}</h2>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                setShowCreate((v) => !v);
-                setError('');
-              }}
-            >
-              {showCreate ? t.branchesPage.cancel : t.branchesPage.addBranch}
-            </button>
-          </div>
-          {showCreate ? (
+          <h2>{t.branchesPage.orgTitle}</h2>
+          <p className="muted">{t.branchesPage.orgHelp}</p>
+          {org ? (
             <>
-              <p className="muted">{t.branchesPage.requiredHint}</p>
               <div className="form-grid">
                 <Field
-                  label={t.branchesPage.code}
-                  value={createForm.code}
-                  onChange={(v) =>
-                    setCreateForm({ ...createForm, code: v.toUpperCase() })
-                  }
-                />
-                <Field
-                  label={t.branchesPage.siteName}
-                  value={createForm.name}
-                  onChange={(v) => setCreateForm({ ...createForm, name: v })}
-                />
-                <Field
                   label={t.branchesPage.legalName}
-                  value={createForm.legalName}
-                  onChange={(v) => setCreateForm({ ...createForm, legalName: v })}
+                  value={org.name}
+                  disabled={!isAdmin}
+                  onChange={(v) => setOrg({ ...org, name: v })}
                 />
                 <Field
                   label={t.branchesPage.tradeName}
-                  value={createForm.tradeName}
-                  onChange={(v) => setCreateForm({ ...createForm, tradeName: v })}
+                  value={org.tradeName ?? ''}
+                  disabled={!isAdmin}
+                  onChange={(v) => setOrg({ ...org, tradeName: v })}
                 />
                 <Field
                   label={t.branchesPage.cnpj}
-                  value={createForm.cnpj}
+                  value={org.cnpj}
+                  disabled={!isAdmin}
                   format={formatCnpj}
-                  onChange={(v) => setCreateForm({ ...createForm, cnpj: v })}
+                  onChange={(v) => setOrg({ ...org, cnpj: v })}
                 />
                 <Field
                   label={t.branchesPage.ie}
-                  value={createForm.ie}
-                  onChange={(v) => setCreateForm({ ...createForm, ie: v })}
+                  value={org.ie ?? ''}
+                  disabled={!isAdmin}
+                  onChange={(v) => setOrg({ ...org, ie: v })}
                 />
                 <Field
                   label={t.branchesPage.im}
-                  value={createForm.im}
-                  onChange={(v) => setCreateForm({ ...createForm, im: v })}
+                  value={org.im ?? ''}
+                  disabled={!isAdmin}
+                  onChange={(v) => setOrg({ ...org, im: v })}
                 />
                 <Field
                   label={t.branchesPage.street}
-                  value={createForm.street}
-                  onChange={(v) => setCreateForm({ ...createForm, street: v })}
+                  value={org.street ?? ''}
+                  disabled={!isAdmin}
+                  onChange={(v) => setOrg({ ...org, street: v })}
                 />
                 <Field
                   label={t.branchesPage.city}
-                  value={createForm.city}
-                  onChange={(v) => setCreateForm({ ...createForm, city: v })}
+                  value={org.city ?? ''}
+                  disabled={!isAdmin}
+                  onChange={(v) => setOrg({ ...org, city: v })}
                 />
                 <Field
                   label={t.branchesPage.state}
-                  value={createForm.state}
+                  value={org.state ?? ''}
+                  disabled={!isAdmin}
                   onChange={(v) =>
-                    setCreateForm({
-                      ...createForm,
-                      state: v.toUpperCase().slice(0, 2),
-                    })
+                    setOrg({ ...org, state: v.toUpperCase().slice(0, 2) })
                   }
                 />
                 <Field
                   label={t.branchesPage.cep}
-                  value={createForm.cep}
+                  value={org.cep ?? ''}
+                  disabled={!isAdmin}
                   format={formatCep}
-                  onChange={(v) => setCreateForm({ ...createForm, cep: v })}
+                  onChange={(v) => setOrg({ ...org, cep: v })}
                 />
                 <Field
                   label={t.branchesPage.phone}
-                  value={createForm.phone}
+                  value={org.phone ?? ''}
+                  disabled={!isAdmin}
                   format={formatPhoneBr}
-                  onChange={(v) => setCreateForm({ ...createForm, phone: v })}
+                  onChange={(v) => setOrg({ ...org, phone: v })}
                 />
                 <Field
                   label={t.branchesPage.email}
-                  value={createForm.email}
-                  onChange={(v) => setCreateForm({ ...createForm, email: v })}
+                  value={org.email ?? ''}
+                  disabled={!isAdmin}
+                  onChange={(v) => setOrg({ ...org, email: v })}
                 />
               </div>
-              <div className="actions">
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={busy === 'create'}
-                  onClick={createBranch}
-                >
-                  {t.branchesPage.createBranch}
-                </button>
-              </div>
+              {isAdmin ? (
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={busy === 'org'}
+                    onClick={saveOrg}
+                  >
+                    {t.branchesPage.save}
+                  </button>
+                </div>
+              ) : null}
             </>
-          ) : null}
+          ) : (
+            <p className="muted">{t.loading}</p>
+          )}
+        </section>
+      ) : null}
+
+      {isAdmin && showCreate ? (
+        <section className="panel" style={{ marginBottom: '1rem' }}>
+          <h2>{t.branchesPage.addBranch}</h2>
+          <p className="muted">{t.branchesPage.requiredHint}</p>
+          <div className="form-grid">
+            <Field
+              label={t.branchesPage.code}
+              value={createForm.code}
+              onChange={(v) =>
+                setCreateForm({ ...createForm, code: v.toUpperCase() })
+              }
+            />
+            <Field
+              label={t.branchesPage.siteName}
+              value={createForm.name}
+              onChange={(v) => setCreateForm({ ...createForm, name: v })}
+            />
+            <Field
+              label={t.branchesPage.legalName}
+              value={createForm.legalName}
+              onChange={(v) => setCreateForm({ ...createForm, legalName: v })}
+            />
+            <Field
+              label={t.branchesPage.tradeName}
+              value={createForm.tradeName}
+              onChange={(v) => setCreateForm({ ...createForm, tradeName: v })}
+            />
+            <Field
+              label={t.branchesPage.cnpj}
+              value={createForm.cnpj}
+              format={formatCnpj}
+              onChange={(v) => setCreateForm({ ...createForm, cnpj: v })}
+            />
+            <Field
+              label={t.branchesPage.ie}
+              value={createForm.ie}
+              onChange={(v) => setCreateForm({ ...createForm, ie: v })}
+            />
+            <Field
+              label={t.branchesPage.im}
+              value={createForm.im}
+              onChange={(v) => setCreateForm({ ...createForm, im: v })}
+            />
+            <Field
+              label={t.branchesPage.street}
+              value={createForm.street}
+              onChange={(v) => setCreateForm({ ...createForm, street: v })}
+            />
+            <Field
+              label={t.branchesPage.city}
+              value={createForm.city}
+              onChange={(v) => setCreateForm({ ...createForm, city: v })}
+            />
+            <Field
+              label={t.branchesPage.state}
+              value={createForm.state}
+              onChange={(v) =>
+                setCreateForm({
+                  ...createForm,
+                  state: v.toUpperCase().slice(0, 2),
+                })
+              }
+            />
+            <Field
+              label={t.branchesPage.cep}
+              value={createForm.cep}
+              format={formatCep}
+              onChange={(v) => setCreateForm({ ...createForm, cep: v })}
+            />
+            <Field
+              label={t.branchesPage.phone}
+              value={createForm.phone}
+              format={formatPhoneBr}
+              onChange={(v) => setCreateForm({ ...createForm, phone: v })}
+            />
+            <Field
+              label={t.branchesPage.email}
+              value={createForm.email}
+              onChange={(v) => setCreateForm({ ...createForm, email: v })}
+            />
+          </div>
+          <div className="actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={busy === 'create'}
+              onClick={createBranch}
+            >
+              {t.branchesPage.createBranch}
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -656,15 +675,20 @@ export default function BranchesPage() {
                   >
                     {t.branchesPage.save}
                   </button>
-                  <button
-                    type="button"
-                    className="ghost danger-btn"
-                    disabled={busy === 'delete'}
-                    onClick={deleteBranch}
-                  >
-                    {t.branchesPage.deleteBranch}
-                  </button>
+                  {master ? (
+                    <button
+                      type="button"
+                      className="ghost danger-btn"
+                      disabled={busy === 'delete'}
+                      onClick={() => setConfirmOpen(true)}
+                    >
+                      {t.branchesPage.deleteBranch}
+                    </button>
+                  ) : null}
                 </div>
+              ) : null}
+              {isAdmin && !master ? (
+                <p className="muted">{t.branchesPage.masterOnlyDelete}</p>
               ) : null}
             </>
           ) : (
@@ -672,6 +696,18 @@ export default function BranchesPage() {
           )}
         </section>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen && Boolean(branch)}
+        title={t.masterDelete.title}
+        entityLabel={branch ? `${branch.code} — ${branch.name}` : ''}
+        message={t.masterDelete.branchMsg}
+        confirmLabel={t.branchesPage.deleteBranch}
+        cancelLabel={t.masterDelete.cancel}
+        busy={busy === 'delete'}
+        onConfirm={deleteBranch}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </AppShell>
   );
 }

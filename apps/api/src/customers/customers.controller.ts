@@ -1,14 +1,18 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { IsOptional, IsString, MinLength } from 'class-validator';
+import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { MasterAdminGuard } from '../auth/master-admin.guard';
 import { CustomersService } from './customers.service';
 
 class UpsertCustomerDto {
@@ -80,5 +84,19 @@ export class CustomersController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: UpsertCustomerDto) {
     return this.customers.update(id, body);
+  }
+
+  @Delete(':id')
+  @UseGuards(MasterAdminGuard)
+  remove(
+    @Param('id') id: string,
+    @Query('hard') hard: string | undefined,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.customers.remove(
+      id,
+      { userId: user.userId, email: user.email },
+      hard === '1' || hard === 'true',
+    );
   }
 }
