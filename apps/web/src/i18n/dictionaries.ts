@@ -71,7 +71,14 @@ export const dictionaries = {
       cep: 'CEP',
       created: 'Cliente criado',
       createHint:
-        'Cadastre o cliente aqui; depois selecione-o em Nova proposta.',
+        'Cadastre o cliente e abra Nova proposta na linha para cotar na hora.',
+      sort: 'Ordenar',
+      sortNewest: 'Mais recentes',
+      sortOldest: 'Mais antigos',
+      sortNameAsc: 'Nome A–Z',
+      sortNameDesc: 'Nome Z–A',
+      newProposal: 'Nova proposta',
+      actions: 'Ações',
     },
     proposals: {
       title: 'Propostas',
@@ -321,7 +328,14 @@ export const dictionaries = {
       cep: 'ZIP / CEP',
       created: 'Customer created',
       createHint:
-        'Create the customer here; then select them on New proposal.',
+        'Create the customer, then open New proposal on the row to quote right away.',
+      sort: 'Sort',
+      sortNewest: 'Newest first',
+      sortOldest: 'Oldest first',
+      sortNameAsc: 'Name A–Z',
+      sortNameDesc: 'Name Z–A',
+      newProposal: 'New proposal',
+      actions: 'Actions',
     },
     proposals: {
       title: 'Proposals',

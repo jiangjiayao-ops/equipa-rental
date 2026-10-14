@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
 import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
@@ -103,8 +104,18 @@ const defaultOptions = (): Option[] => [
   },
 ];
 
-export default function ProposalsPage() {
+function ProposalsPageInner() {
   const { t, locale } = useLocale();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  /** Capture once so clearing the URL cannot drop the preselect. */
+  const launchQuery = useRef({
+    customerId: searchParams.get('customerId') || '',
+    openNew: searchParams.get('new') === '1',
+  });
+  const preselectCustomerId = launchQuery.current.customerId;
+  const openCreateFromQuery = launchQuery.current.openNew;
+
   const [rows, setRows] = useState<Proposal[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -119,6 +130,7 @@ export default function ProposalsPage() {
     email: string;
     whatsapp: string;
   } | null>(null);
+  const [queryApplied, setQueryApplied] = useState(false);
 
   /** Default off so contracted machines can be quoted; toggle to restrict. */
   const [onlyAvailable, setOnlyAvailable] = useState(false);
@@ -177,11 +189,18 @@ export default function ProposalsPage() {
       setBranches(br);
       setEquipment(eq);
       setNotifyConfig(cfg);
-      setForm((prev) => ({
-        ...prev,
-        customerId: prev.customerId || cust[0]?.id || '',
-        branchId: prev.branchId || br[0]?.id || '',
-      }));
+      setForm((prev) => {
+        const fromQuery =
+          preselectCustomerId &&
+          cust.some((c) => c.id === preselectCustomerId)
+            ? preselectCustomerId
+            : '';
+        return {
+          ...prev,
+          customerId: fromQuery || prev.customerId || cust[0]?.id || '',
+          branchId: prev.branchId || br[0]?.id || '',
+        };
+      });
       setPickedId(eq[0]?.id || '');
     } catch (err) {
       setError(apiError(err, t.error));
@@ -191,6 +210,27 @@ export default function ProposalsPage() {
   useEffect(() => {
     load();
   }, [t.error]);
+
+  useEffect(() => {
+    if (queryApplied) return;
+    if (!openCreateFromQuery && !preselectCustomerId) return;
+    if (!customers.length) return;
+    if (
+      preselectCustomerId &&
+      customers.some((c) => c.id === preselectCustomerId)
+    ) {
+      setForm((prev) => ({ ...prev, customerId: preselectCustomerId }));
+    }
+    if (openCreateFromQuery) setShowCreate(true);
+    setQueryApplied(true);
+    router.replace('/propostas', { scroll: false });
+  }, [
+    customers,
+    openCreateFromQuery,
+    preselectCustomerId,
+    queryApplied,
+    router,
+  ]);
 
   useEffect(() => {
     if (!filteredFleet.some((e) => e.id === pickedId)) {
@@ -836,5 +876,13 @@ export default function ProposalsPage() {
         </section>
       ) : null}
     </AppShell>
+  );
+}
+
+export default function ProposalsPage() {
+  return (
+    <Suspense fallback={<AppShell><p className="muted">…</p></AppShell>}>
+      <ProposalsPageInner />
+    </Suspense>
   );
 }

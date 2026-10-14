@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
 import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
@@ -24,6 +25,7 @@ type Customer = {
   phone?: string | null;
   city?: string | null;
   state?: string | null;
+  createdAt?: string;
   contacts?: Array<{ name: string; email?: string | null; phone?: string | null }>;
   sites?: Array<{ address: string; city: string; state: string }>;
   _count: { contracts: number; proposals: number };
@@ -41,6 +43,11 @@ type CreateForm = {
   state: string;
   cep: string;
 };
+
+type SortKey = 'newest' | 'oldest' | 'nameAsc' | 'nameDesc';
+
+const SORT_STORAGE_KEY = 'equipa_customers_sort';
+const SORT_KEYS: SortKey[] = ['newest', 'oldest', 'nameAsc', 'nameDesc'];
 
 const emptyForm = (): CreateForm => ({
   legalName: '',
@@ -67,14 +74,43 @@ function apiError(err: unknown, fallback: string) {
   return err.message || fallback;
 }
 
+function readStoredSort(): SortKey {
+  if (typeof window === 'undefined') return 'newest';
+  const raw = window.localStorage.getItem(SORT_STORAGE_KEY);
+  if (raw && SORT_KEYS.includes(raw as SortKey)) return raw as SortKey;
+  return 'newest';
+}
+
+function sortCustomers(list: Customer[], sort: SortKey): Customer[] {
+  const copy = [...list];
+  copy.sort((a, b) => {
+    if (sort === 'nameAsc' || sort === 'nameDesc') {
+      const cmp = a.legalName.localeCompare(b.legalName, undefined, {
+        sensitivity: 'base',
+      });
+      return sort === 'nameAsc' ? cmp : -cmp;
+    }
+    const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+    const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+    return sort === 'oldest' ? ta - tb : tb - ta;
+  });
+  return copy;
+}
+
 export default function CustomersPage() {
   const { t } = useLocale();
+  const router = useRouter();
   const [rows, setRows] = useState<Customer[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<CreateForm>(emptyForm);
+  const [sort, setSort] = useState<SortKey>('newest');
+
+  useEffect(() => {
+    setSort(readStoredSort());
+  }, []);
 
   const load = async () => {
     try {
@@ -88,6 +124,15 @@ export default function CustomersPage() {
   useEffect(() => {
     load();
   }, [t.error]);
+
+  const sortedRows = useMemo(() => sortCustomers(rows, sort), [rows, sort]);
+
+  const changeSort = (next: SortKey) => {
+    setSort(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(SORT_STORAGE_KEY, next);
+    }
+  };
 
   const createCustomer = async () => {
     setBusy(true);
@@ -122,6 +167,10 @@ export default function CustomersPage() {
     }
   };
 
+  const openNewProposal = (customerId: string) => {
+    router.push(`/propostas?customerId=${encodeURIComponent(customerId)}&new=1`);
+  };
+
   return (
     <AppShell>
       <PageHeader title={t.customers.title} subtitle={t.customers.subtitle} />
@@ -131,7 +180,16 @@ export default function CustomersPage() {
       {error ? <p className="error-msg">{error}</p> : null}
       {message ? <p className="ok-msg">{message}</p> : null}
 
-      <div className="actions" style={{ marginBottom: '1rem' }}>
+      <div
+        className="actions"
+        style={{
+          marginBottom: '1rem',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          alignItems: 'end',
+        }}
+      >
         <button
           type="button"
           className="primary"
@@ -142,6 +200,18 @@ export default function CustomersPage() {
         >
           {showCreate ? t.customers.cancel : t.customers.addCustomer}
         </button>
+        <label className="field" style={{ margin: 0, minWidth: 200 }}>
+          <span>{t.customers.sort}</span>
+          <select
+            value={sort}
+            onChange={(e) => changeSort(e.target.value as SortKey)}
+          >
+            <option value="newest">{t.customers.sortNewest}</option>
+            <option value="oldest">{t.customers.sortOldest}</option>
+            <option value="nameAsc">{t.customers.sortNameAsc}</option>
+            <option value="nameDesc">{t.customers.sortNameDesc}</option>
+          </select>
+        </label>
       </div>
 
       {showCreate ? (
@@ -264,15 +334,24 @@ export default function CustomersPage() {
             t.customers.phoneWhatsapp,
             t.customers.city,
             t.customers.contracts,
+            t.customers.actions,
           ]}
           empty={t.empty}
-          rows={rows.map((c) => [
+          rows={sortedRows.map((c) => [
             c.legalName,
             formatCpfOrCnpj(c.document) || c.document,
             c.email || '—',
             c.phone || '—',
             [c.city, c.state].filter(Boolean).join(' / ') || '—',
             String(c._count.contracts),
+            <button
+              key="np"
+              type="button"
+              className="ghost"
+              onClick={() => openNewProposal(c.id)}
+            >
+              {t.customers.newProposal}
+            </button>,
           ])}
         />
       </section>
