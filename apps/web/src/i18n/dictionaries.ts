@@ -100,6 +100,11 @@ export const dictionaries = {
       sortNameDesc: 'Nome Z–A',
       newProposal: 'Nova proposta',
       actions: 'Ações',
+      edit: 'Editar',
+      save: 'Salvar',
+      updated: 'Cliente atualizado',
+      detail: 'Detalhe do cliente',
+      close: 'Fechar',
     },
     proposals: {
       title: 'Propostas',
@@ -157,6 +162,13 @@ export const dictionaries = {
       hoursCustom: 'Personalizado',
       hoursValue: 'Horas',
       hoursPerPeriod: 'por período de locação',
+      edit: 'Editar',
+      save: 'Salvar alterações',
+      updated: 'Proposta atualizada',
+      editDraft: 'Editar rascunho',
+      lockedHint:
+        'Propostas enviadas ou aceitas não podem ser editadas. Somente rascunhos (DRAFT).',
+      editing: 'Editando rascunho',
     },
     publicProposal: {
       title: 'Proposta comercial',
@@ -378,6 +390,11 @@ export const dictionaries = {
       sortNameDesc: 'Name Z–A',
       newProposal: 'New proposal',
       actions: 'Actions',
+      edit: 'Edit',
+      save: 'Save',
+      updated: 'Customer updated',
+      detail: 'Customer detail',
+      close: 'Close',
     },
     proposals: {
       title: 'Proposals',
@@ -435,6 +452,13 @@ export const dictionaries = {
       hoursCustom: 'Custom',
       hoursValue: 'Hours',
       hoursPerPeriod: 'per rental period',
+      edit: 'Edit',
+      save: 'Save changes',
+      updated: 'Proposal updated',
+      editDraft: 'Edit draft',
+      lockedHint:
+        'Sent or accepted proposals cannot be edited. Only drafts (DRAFT).',
+      editing: 'Editing draft',
     },
     publicProposal: {
       title: 'Commercial proposal',

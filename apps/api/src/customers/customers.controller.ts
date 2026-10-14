@@ -1,9 +1,17 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { IsOptional, IsString, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CustomersService } from './customers.service';
 
-class CreateCustomerDto {
+class UpsertCustomerDto {
   @IsString()
   @MinLength(1)
   legalName!: string;
@@ -65,7 +73,12 @@ export class CustomersController {
   }
 
   @Post()
-  create(@Body() body: CreateCustomerDto) {
+  create(@Body() body: UpsertCustomerDto) {
     return this.customers.create(body);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() body: UpsertCustomerDto) {
+    return this.customers.update(id, body);
   }
 }

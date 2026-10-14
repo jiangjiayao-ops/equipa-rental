@@ -114,8 +114,45 @@ class CreateProposalDto {
 
 class UpdateProposalDto {
   @IsOptional()
+  @IsString()
+  customerId?: string;
+
+  @IsOptional()
+  @IsString()
+  branchId?: string;
+
+  @IsOptional()
   @IsEnum(BillingTiming)
   billingTiming?: BillingTiming;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  allowedHours?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  hoursUnlimited?: boolean;
+
+  @IsOptional()
+  @IsString()
+  validUntil?: string | null;
+
+  @IsOptional()
+  @IsString()
+  notes?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LineDto)
+  lines?: LineDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OptionDto)
+  options?: OptionDto[];
 }
 
 class SendDto {
@@ -190,10 +227,31 @@ export class ProposalsController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: UpdateProposalDto) {
-    if (!body.billingTiming) {
-      return this.proposals.get(id);
+    const isFullEdit =
+      Boolean(body.customerId) &&
+      Boolean(body.branchId) &&
+      Array.isArray(body.lines) &&
+      Array.isArray(body.options);
+
+    if (isFullEdit) {
+      return this.proposals.updateDraft(id, {
+        customerId: body.customerId!,
+        branchId: body.branchId!,
+        billingTiming: body.billingTiming,
+        allowedHours: body.allowedHours,
+        hoursUnlimited: body.hoursUnlimited,
+        validUntil: body.validUntil ?? undefined,
+        notes: body.notes ?? undefined,
+        lines: body.lines!,
+        options: body.options!,
+      });
     }
-    return this.proposals.updateBillingTiming(id, body.billingTiming);
+
+    if (body.billingTiming) {
+      return this.proposals.updateBillingTiming(id, body.billingTiming);
+    }
+
+    return this.proposals.get(id);
   }
 
   @Post(':id/send')

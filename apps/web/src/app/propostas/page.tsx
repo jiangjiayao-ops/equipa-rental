@@ -22,39 +22,6 @@ type Option = {
   demobFee: number;
 };
 
-type Proposal = {
-  id: string;
-  number: string;
-  status: string;
-  billingTiming: BillingTiming;
-  allowedHours?: number;
-  hoursUnlimited?: boolean;
-  publicToken?: string | null;
-  notes?: string | null;
-  validUntil?: string | null;
-  customer: { id?: string; legalName: string; email?: string | null; phone?: string | null };
-  branch: { id?: string; code: string };
-  lines: Array<{
-    billingPeriod: string;
-    unitRate: number;
-    description: string;
-    equipmentId?: string | null;
-  }>;
-  options?: Option[];
-  sendAttempts?: Array<{
-    id: string;
-    channel: string;
-    status: string;
-    provider: string;
-    toAddress?: string | null;
-    publicUrl?: string | null;
-    error?: string | null;
-    createdAt: string;
-  }>;
-  contracts?: Array<{ id: string; number: string; status: string }>;
-  acceptedOption?: Option | null;
-};
-
 type Customer = {
   id: string;
   legalName: string;
@@ -71,6 +38,40 @@ type Equipment = {
   branchId?: string;
   branch?: { id?: string; code: string; name?: string };
   category?: { name: string };
+};
+
+type Proposal = {
+  id: string;
+  number: string;
+  status: string;
+  billingTiming: BillingTiming;
+  allowedHours?: number;
+  hoursUnlimited?: boolean;
+  publicToken?: string | null;
+  notes?: string | null;
+  validUntil?: string | null;
+  customer: { id?: string; legalName: string; email?: string | null; phone?: string | null };
+  branch: { id?: string; code: string; name?: string };
+  lines: Array<{
+    billingPeriod: string;
+    unitRate: number;
+    description: string;
+    equipmentId?: string | null;
+    equipment?: Equipment | null;
+  }>;
+  options?: Option[];
+  sendAttempts?: Array<{
+    id: string;
+    channel: string;
+    status: string;
+    provider: string;
+    toAddress?: string | null;
+    publicUrl?: string | null;
+    error?: string | null;
+    createdAt: string;
+  }>;
+  contracts?: Array<{ id: string; number: string; status: string }>;
+  acceptedOption?: Option | null;
 };
 
 function apiError(err: unknown, fallback: string) {
@@ -125,6 +126,7 @@ function ProposalsPageInner() {
   const [busy, setBusy] = useState('');
   const [selected, setSelected] = useState<Proposal | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [publicUrl, setPublicUrl] = useState('');
   const [notifyConfig, setNotifyConfig] = useState<{
     email: string;
@@ -261,6 +263,102 @@ function ProposalsPageInner() {
     setPickedId(next?.id || '');
   };
 
+  const buildProposalBody = () => {
+    const hoursUnlimited = hoursMode === 'unlimited';
+    const allowedHours =
+      hoursMode === 'custom'
+        ? Number(customHours) || 200
+        : hoursMode === 'default'
+          ? 200
+          : hoursMode === 'unlimited'
+            ? undefined
+            : Number(customHours) || 200;
+    return {
+      customerId: form.customerId,
+      branchId: form.branchId,
+      billingTiming: form.billingTiming,
+      validUntil: form.validUntil || undefined,
+      notes: form.notes || undefined,
+      hoursUnlimited,
+      allowedHours: hoursUnlimited ? undefined : allowedHours,
+      lines: selectedMachines.map((m) => ({ equipmentId: m.id })),
+      options: form.options.map((o, i) => ({
+        label: o.label,
+        billingPeriod: o.billingPeriod,
+        durationDays: Number(o.durationDays),
+        unitRate: Number(o.unitRate),
+        mobFee: Number(o.mobFee) || 0,
+        demobFee: Number(o.demobFee) || 0,
+        sortOrder: i,
+      })),
+    };
+  };
+
+  const resetEditor = () => {
+    setShowCreate(false);
+    setEditingId(null);
+    setSelectedMachines([]);
+    setHoursMode('default');
+    setCustomHours(200);
+    setForm((prev) => ({
+      ...prev,
+      notes: '',
+      validUntil: '',
+      billingTiming: 'ADVANCE',
+      options: defaultOptions(),
+    }));
+  };
+
+  const startEditDraft = (proposal: Proposal) => {
+    if (proposal.status !== 'DRAFT') {
+      setError(t.proposals.lockedHint);
+      return;
+    }
+    const machines = proposal.lines
+      .map((l) => {
+        if (l.equipment) return l.equipment as Equipment;
+        return equipment.find((e) => e.id === l.equipmentId) || null;
+      })
+      .filter((m): m is Equipment => Boolean(m));
+
+    let mode: HoursMode = 'default';
+    let custom = 200;
+    if (proposal.hoursUnlimited) mode = 'unlimited';
+    else if (proposal.allowedHours != null && proposal.allowedHours !== 200) {
+      mode = 'custom';
+      custom = proposal.allowedHours;
+    }
+
+    setEditingId(proposal.id);
+    setShowCreate(true);
+    setSelected(null);
+    setSelectedMachines(machines);
+    setHoursMode(mode);
+    setCustomHours(custom);
+    setForm({
+      customerId: proposal.customer.id || form.customerId,
+      branchId: proposal.branch.id || form.branchId,
+      billingTiming: proposal.billingTiming || 'ADVANCE',
+      validUntil: proposal.validUntil
+        ? proposal.validUntil.slice(0, 10)
+        : '',
+      notes: proposal.notes || '',
+      options:
+        proposal.options && proposal.options.length
+          ? proposal.options.map((o) => ({
+              label: o.label,
+              billingPeriod: o.billingPeriod,
+              durationDays: o.durationDays,
+              unitRate: o.unitRate,
+              mobFee: o.mobFee,
+              demobFee: o.demobFee,
+            }))
+          : defaultOptions(),
+    });
+    setError('');
+    setMessage('');
+  };
+
   const createProposal = async () => {
     if (!selectedMachines.length) {
       setError(t.proposals.selectMachineHint);
@@ -270,42 +368,39 @@ function ProposalsPageInner() {
     setError('');
     setMessage('');
     try {
-      const hoursUnlimited = hoursMode === 'unlimited';
-      const allowedHours =
-        hoursMode === 'custom'
-          ? Number(customHours) || 200
-          : hoursMode === 'default'
-            ? 200
-            : undefined;
       const created = await api<Proposal>('/proposals', {
         method: 'POST',
-        body: JSON.stringify({
-          customerId: form.customerId,
-          branchId: form.branchId,
-          billingTiming: form.billingTiming,
-          validUntil: form.validUntil || undefined,
-          notes: form.notes || undefined,
-          hoursUnlimited,
-          allowedHours: hoursUnlimited ? undefined : allowedHours,
-          lines: selectedMachines.map((m) => ({ equipmentId: m.id })),
-          options: form.options.map((o, i) => ({
-            label: o.label,
-            billingPeriod: o.billingPeriod,
-            durationDays: Number(o.durationDays),
-            unitRate: Number(o.unitRate),
-            mobFee: Number(o.mobFee) || 0,
-            demobFee: Number(o.demobFee) || 0,
-            sortOrder: i,
-          })),
-        }),
+        body: JSON.stringify(buildProposalBody()),
       });
-      setShowCreate(false);
-      setSelectedMachines([]);
-      setHoursMode('default');
-      setCustomHours(200);
+      resetEditor();
       setMessage(`${t.proposals.create}: ${created.number}`);
       await load();
       await open(created.id);
+    } catch (err) {
+      setError(apiError(err, t.error));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const saveDraft = async () => {
+    if (!editingId) return;
+    if (!selectedMachines.length) {
+      setError(t.proposals.selectMachineHint);
+      return;
+    }
+    setBusy('save');
+    setError('');
+    setMessage('');
+    try {
+      const updated = await api<Proposal>(`/proposals/${editingId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(buildProposalBody()),
+      });
+      resetEditor();
+      setMessage(`${t.proposals.updated}: ${updated.number}`);
+      await load();
+      await open(updated.id);
     } catch (err) {
       setError(apiError(err, t.error));
     } finally {
@@ -387,7 +482,23 @@ function ProposalsPageInner() {
           type="button"
           className="primary"
           onClick={() => {
-            setShowCreate((v) => !v);
+            if (showCreate) {
+              resetEditor();
+            } else {
+              setEditingId(null);
+              setShowCreate(true);
+              setSelected(null);
+              setSelectedMachines([]);
+              setHoursMode('default');
+              setCustomHours(200);
+              setForm((prev) => ({
+                ...prev,
+                notes: '',
+                validUntil: '',
+                billingTiming: 'ADVANCE',
+                options: defaultOptions(),
+              }));
+            }
             setError('');
           }}
         >
@@ -397,7 +508,9 @@ function ProposalsPageInner() {
 
       {showCreate ? (
         <section className="panel" style={{ marginBottom: '1rem' }}>
-          <h2>{t.proposals.newProposal}</h2>
+          <h2>
+            {editingId ? t.proposals.editing : t.proposals.newProposal}
+          </h2>
           <div className="form-grid">
             <label className="field">
               <span>{t.proposals.customer}</span>
@@ -709,10 +822,10 @@ function ProposalsPageInner() {
             <button
               type="button"
               className="primary"
-              disabled={busy === 'create'}
-              onClick={createProposal}
+              disabled={busy === 'create' || busy === 'save'}
+              onClick={editingId ? saveDraft : createProposal}
             >
-              {t.proposals.create}
+              {editingId ? t.proposals.save : t.proposals.create}
             </button>
           </div>
         </section>
@@ -773,6 +886,9 @@ function ProposalsPageInner() {
             {' · '}
             {t.proposals.allowedHours}: {formatHoursLabel(selected)}
           </p>
+          {selected.status !== 'DRAFT' ? (
+            <p className="muted">{t.proposals.lockedHint}</p>
+          ) : null}
 
           <h3>{t.proposals.equipment}</h3>
           <ul>
@@ -810,6 +926,15 @@ function ProposalsPageInner() {
           ) : null}
 
           <div className="actions">
+            {selected.status === 'DRAFT' ? (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => startEditDraft(selected)}
+              >
+                {t.proposals.editDraft}
+              </button>
+            ) : null}
             <button
               type="button"
               className="primary"

@@ -115,4 +115,84 @@ export class CustomersService {
     if (!customer) throw new NotFoundException('Cliente não encontrado');
     return customer;
   }
+
+  async update(id: string, input: CreateCustomerInput) {
+    await this.getOrThrow(id);
+
+    const legalName = input.legalName?.trim();
+    const document = input.document?.trim();
+    if (!legalName || !document) {
+      throw new BadRequestException('Razão social e CNPJ/CPF são obrigatórios');
+    }
+
+    const digits = document.replace(/\D/g, '');
+    const documentType =
+      input.documentType || (digits.length <= 11 ? 'CPF' : 'CNPJ');
+
+    const clash = await this.prisma.customer.findFirst({
+      where: { document, NOT: { id } },
+    });
+    if (clash) {
+      throw new ConflictException('Já existe cliente com este documento');
+    }
+
+    const city = input.city?.trim() || null;
+    const state = input.state?.trim()?.toUpperCase() || null;
+    const street = input.street?.trim() || null;
+    const email = input.email?.trim() || null;
+    const phone = input.phone?.trim() || null;
+    const contactName = input.contactName?.trim() || null;
+    const cep = input.cep?.trim() || null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.customer.update({
+        where: { id },
+        data: {
+          legalName,
+          tradeName: input.tradeName?.trim() || legalName,
+          document,
+          documentType,
+          email,
+          phone,
+          city,
+          state,
+        },
+      });
+
+      await tx.customerContact.deleteMany({ where: { customerId: id } });
+      if (contactName) {
+        await tx.customerContact.create({
+          data: {
+            customerId: id,
+            name: contactName,
+            email,
+            phone,
+            role: 'commercial',
+          },
+        });
+      }
+
+      await tx.customerSite.deleteMany({ where: { customerId: id } });
+      if (street && city && state) {
+        await tx.customerSite.create({
+          data: {
+            customerId: id,
+            name: 'Principal',
+            address: `${street}${cep ? ` · CEP ${cep}` : ''}`,
+            city,
+            state,
+          },
+        });
+      }
+    });
+
+    return this.prisma.customer.findUniqueOrThrow({
+      where: { id },
+      include: {
+        contacts: true,
+        sites: true,
+        _count: { select: { contracts: true, proposals: true } },
+      },
+    });
+  }
 }
