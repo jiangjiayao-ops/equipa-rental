@@ -234,13 +234,19 @@ model Equipment {
   category        EquipmentCategory @relation(fields: [categoryId], references: [id])
   branchId        String
   branch          Branch            @relation(fields: [branchId], references: [id])
+  /// Make / fabricante
   brand           String
   model           String
   year            Int?
   serialNumber    String?
+  /// Vehicle identification number (when applicable)
+  vin             String?
+  /// Chassis / frame number
+  frameNumber     String?
   plate           String?
   hourMeter       Float             @default(0)
   status          EquipmentStatus   @default(AVAILABLE)
+  notes           String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   proposalLines   ProposalLine[]
