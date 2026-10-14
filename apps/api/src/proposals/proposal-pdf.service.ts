@@ -32,6 +32,10 @@ const copy = {
     weekly: 'Semanal',
     monthly: 'Mensal',
     yearly: 'Anual',
+    contact: 'Contato comercial',
+    phone: 'Telefone',
+    whatsapp: 'WhatsApp',
+    email: 'E-mail',
   },
   en: {
     title: 'Commercial proposal',
@@ -60,8 +64,33 @@ const copy = {
     weekly: 'Weekly',
     monthly: 'Monthly',
     yearly: 'Yearly',
+    contact: 'Commercial contact',
+    phone: 'Phone',
+    whatsapp: 'WhatsApp',
+    email: 'Email',
   },
 } as const;
+
+function waDigits(raw?: string | null) {
+  if (!raw) return '';
+  let d = raw.replace(/\D/g, '');
+  if (d.length >= 10 && d.length <= 11) d = `55${d}`;
+  return d;
+}
+
+function whatsappUrl(
+  number: string | null | undefined,
+  proposalNumber: string,
+  locale: Locale,
+) {
+  const digits = waDigits(number);
+  if (!digits) return null;
+  const text =
+    locale === 'en'
+      ? `Hello, regarding proposal ${proposalNumber}`
+      : `Olá, ref. proposta ${proposalNumber}`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+}
 
 function brl(n: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -87,6 +116,14 @@ export class ProposalPdfService {
       include: {
         customer: true,
         branch: true,
+        owner: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+            whatsapp: true,
+          },
+        },
         lines: {
           include: {
             equipment: { include: { branch: true } },
@@ -97,7 +134,8 @@ export class ProposalPdfService {
     });
     if (!proposal) throw new NotFoundException('Proposta não encontrada');
 
-    const t = copy[locale === 'en' ? 'en' : 'pt-BR'];
+    const loc: Locale = locale === 'en' ? 'en' : 'pt-BR';
+    const t = copy[loc];
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
@@ -147,6 +185,26 @@ export class ProposalPdfService {
       doc.text(
         `${t.validity}: ${proposal.validUntil.toISOString().slice(0, 10)}`,
       );
+    }
+    if (proposal.owner) {
+      doc.moveDown(0.4);
+      doc.fillColor('#15241e').fontSize(12).text(t.contact);
+      doc.fontSize(11).fillColor('#4f6a5e');
+      doc.text(proposal.owner.name);
+      if (proposal.owner.phone) {
+        doc.text(`${t.phone}: ${proposal.owner.phone}`);
+      }
+      if (proposal.owner.email) {
+        doc.text(`${t.email}: ${proposal.owner.email}`);
+      }
+      const wa = whatsappUrl(
+        proposal.owner.whatsapp || proposal.owner.phone,
+        proposal.number,
+        loc,
+      );
+      if (wa) {
+        doc.text(`${t.whatsapp}: ${wa}`);
+      }
     }
     doc.moveDown(0.8);
 

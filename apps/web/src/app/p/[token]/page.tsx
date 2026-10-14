@@ -6,6 +6,7 @@ import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { useLocale } from '@/i18n/LocaleProvider';
 import { ThemeSwitcher } from '@/theme/ThemeSwitcher';
 import { formatBrl, publicApi } from '@/lib/api';
+import { whatsappDeepLink } from '@/lib/whatsapp';
 
 type Option = {
   id: string;
@@ -29,6 +30,12 @@ type PublicProposal = {
   hoursUnlimited?: boolean;
   customer: { legalName: string };
   branch: { code: string; name: string };
+  owner?: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    whatsapp?: string | null;
+  } | null;
   lines: Array<{ description: string; quantity: number }>;
   options: Option[];
   contracts?: Array<{ number: string; status: string }>;
@@ -50,7 +57,7 @@ function apiError(err: unknown, fallback: string) {
 export default function PublicProposalPage() {
   const params = useParams<{ token: string }>();
   const token = params.token;
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [proposal, setProposal] = useState<PublicProposal | null>(null);
   const [optionId, setOptionId] = useState('');
   const [error, setError] = useState('');
@@ -130,6 +137,51 @@ export default function PublicProposalPage() {
               </span>
             </p>
             <p className="muted">{t.publicProposal.subtitle}</p>
+
+            {proposal.owner ? (
+              <section style={{ marginBottom: '1rem' }}>
+                <h3>{t.publicProposal.contactBlock}</h3>
+                <p>
+                  <strong>{proposal.owner.name}</strong>
+                  {proposal.owner.phone ? (
+                    <>
+                      <br />
+                      {t.publicProposal.phone}: {proposal.owner.phone}
+                    </>
+                  ) : null}
+                </p>
+                <div className="actions" style={{ marginTop: '0.4rem' }}>
+                  {proposal.owner.email ? (
+                    <a
+                      className="ghost"
+                      href={`mailto:${proposal.owner.email}?subject=${encodeURIComponent(proposal.number)}`}
+                    >
+                      {t.publicProposal.emailLink}
+                    </a>
+                  ) : null}
+                  {whatsappDeepLink(
+                    proposal.owner.whatsapp || proposal.owner.phone,
+                    proposal.number,
+                    locale === 'en' ? 'en' : 'pt-BR',
+                  ) ? (
+                    <a
+                      className="ghost"
+                      href={
+                        whatsappDeepLink(
+                          proposal.owner.whatsapp || proposal.owner.phone,
+                          proposal.number,
+                          locale === 'en' ? 'en' : 'pt-BR',
+                        )!
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t.publicProposal.openWhatsApp}
+                    </a>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
 
             {proposal.status === 'EXPIRED' ? (
               <p className="error">{t.publicProposal.expired}</p>

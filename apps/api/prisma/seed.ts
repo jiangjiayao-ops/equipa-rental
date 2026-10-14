@@ -271,22 +271,24 @@ async function ensureOrgStructure() {
         email: 'admin@equipa.com.br',
         passwordHash,
         name: 'Ana Admin',
+        phone: '(11) 98888-0001',
+        whatsapp: '5511988880001',
         role: Role.ADMIN,
       },
     });
   } else {
     await prisma.user.update({
       where: { id: admin.id },
-      data: { passwordHash, role: Role.ADMIN, active: true, organizationId: org.id },
+      data: {
+        passwordHash,
+        role: Role.ADMIN,
+        active: true,
+        organizationId: org.id,
+        phone: admin.phone ?? '(11) 98888-0001',
+        whatsapp: admin.whatsapp ?? '5511988880001',
+      },
     });
   }
-
-  // Remove non-admin demo users if any remain
-  await prisma.user.deleteMany({
-    where: {
-      email: { not: 'admin@equipa.com.br' },
-    },
-  });
 
   return { org, branch };
 }

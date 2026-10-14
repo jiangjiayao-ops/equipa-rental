@@ -27,6 +27,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import type { Response } from 'express';
+import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProposalPdfService } from './proposal-pdf.service';
 import { ProposalsService } from './proposals.service';
@@ -81,6 +82,10 @@ class CreateProposalDto {
   branchId!: string;
 
   @IsOptional()
+  @IsString()
+  ownerId?: string | null;
+
+  @IsOptional()
   @IsEnum(BillingTiming)
   billingTiming?: BillingTiming;
 
@@ -120,6 +125,10 @@ class UpdateProposalDto {
   @IsOptional()
   @IsString()
   branchId?: string;
+
+  @IsOptional()
+  @IsString()
+  ownerId?: string | null;
 
   @IsOptional()
   @IsEnum(BillingTiming)
@@ -221,8 +230,8 @@ export class ProposalsController {
   }
 
   @Post()
-  create(@Body() body: CreateProposalDto) {
-    return this.proposals.create(body);
+  create(@Body() body: CreateProposalDto, @CurrentUser() user: AuthUser) {
+    return this.proposals.create(body, user.userId);
   }
 
   @Patch(':id')
@@ -237,6 +246,7 @@ export class ProposalsController {
       return this.proposals.updateDraft(id, {
         customerId: body.customerId!,
         branchId: body.branchId!,
+        ownerId: body.ownerId,
         billingTiming: body.billingTiming,
         allowedHours: body.allowedHours,
         hoursUnlimited: body.hoursUnlimited,

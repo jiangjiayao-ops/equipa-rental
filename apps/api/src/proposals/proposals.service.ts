@@ -35,6 +35,7 @@ export type ProposalOptionInput = {
 export type CreateProposalInput = {
   customerId: string;
   branchId: string;
+  ownerId?: string | null;
   billingTiming?: BillingTiming;
   allowedHours?: number;
   hoursUnlimited?: boolean;
@@ -43,6 +44,15 @@ export type CreateProposalInput = {
   lines: ProposalLineInput[];
   options: ProposalOptionInput[];
 };
+
+const ownerSelect = {
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  whatsapp: true,
+  role: true,
+} as const;
 
 @Injectable()
 export class ProposalsService {
@@ -55,12 +65,51 @@ export class ProposalsService {
     return {
       customer: true,
       branch: true,
+      owner: { select: ownerSelect },
       lines: { include: { equipment: true } },
       options: { orderBy: { sortOrder: 'asc' as const } },
       sendAttempts: { orderBy: { createdAt: 'desc' as const } },
       contracts: true,
       acceptedOption: true,
     };
+  }
+
+  /** Human number: PROP-YYYY-0001 (per calendar year). */
+  private async nextProposalNumber() {
+    const year = new Date().getFullYear();
+    const prefix = `PROP-${year}-`;
+    const latest = await this.prisma.proposal.findFirst({
+      where: { number: { startsWith: prefix } },
+      orderBy: { number: 'desc' },
+      select: { number: true },
+    });
+    let seq = 1;
+    if (latest?.number) {
+      const part = latest.number.slice(prefix.length);
+      const n = Number(part);
+      if (Number.isFinite(n)) seq = n + 1;
+    }
+    return `${prefix}${String(seq).padStart(4, '0')}`;
+  }
+
+  private async resolveOwnerId(preferred?: string | null, fallbackUserId?: string) {
+    if (preferred) {
+      const u = await this.prisma.user.findFirst({
+        where: { id: preferred, active: true },
+      });
+      if (u) return u.id;
+    }
+    if (fallbackUserId) {
+      const u = await this.prisma.user.findFirst({
+        where: { id: fallbackUserId, active: true },
+      });
+      if (u) return u.id;
+    }
+    const admin = await this.prisma.user.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return admin?.id ?? null;
   }
 
   list() {
@@ -93,6 +142,7 @@ export class ProposalsService {
           },
         },
         branch: { select: { code: true, name: true, city: true, state: true } },
+        owner: { select: ownerSelect },
         lines: {
           include: {
             equipment: { include: { branch: true, category: true } },
@@ -120,7 +170,7 @@ export class ProposalsService {
     return proposal;
   }
 
-  async create(input: CreateProposalInput) {
+  async create(input: CreateProposalInput, actorUserId?: string) {
     if (!input.lines?.length) {
       throw new BadRequestException('Inclua ao menos um equipamento');
     }
@@ -139,8 +189,8 @@ export class ProposalsService {
     }
     const eqMap = new Map(equipment.map((e) => [e.id, e]));
 
-    const count = await this.prisma.proposal.count();
-    const number = `PROP-${String(count + 1).padStart(4, '0')}`;
+    const number = await this.nextProposalNumber();
+    const ownerId = await this.resolveOwnerId(input.ownerId, actorUserId);
     const publicToken = randomBytes(24).toString('hex');
     const defaultPeriod = input.options[0].billingPeriod;
 
@@ -156,6 +206,7 @@ export class ProposalsService {
         number,
         customerId: input.customerId,
         branchId: input.branchId,
+        ownerId,
         status: ProposalStatus.DRAFT,
         billingTiming: input.billingTiming ?? BillingTiming.ADVANCE,
         allowedHours,
@@ -242,6 +293,10 @@ export class ProposalsService {
     }
     const eqMap = new Map(equipment.map((e) => [e.id, e]));
     const defaultPeriod = input.options[0].billingPeriod;
+    const ownerId = await this.resolveOwnerId(
+      input.ownerId,
+      proposal.ownerId ?? undefined,
+    );
 
     const hoursUnlimited = Boolean(input.hoursUnlimited);
     const allowedHours = hoursUnlimited
@@ -259,6 +314,7 @@ export class ProposalsService {
         data: {
           customerId: input.customerId,
           branchId: input.branchId,
+          ownerId,
           billingTiming: input.billingTiming ?? BillingTiming.ADVANCE,
           allowedHours,
           hoursUnlimited,

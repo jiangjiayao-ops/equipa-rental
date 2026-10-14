@@ -173,10 +173,14 @@ model User {
   email          String       @unique
   passwordHash   String
   name           String
+  phone          String?
+  /// WhatsApp number (digits with country code preferred, e.g. 5511987654321)
+  whatsapp       String?
   role           Role         @default(READ_ONLY)
   active         Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  ownedProposals Proposal[]   @relation("ProposalOwner")
 }
 
 model Customer {
@@ -285,6 +289,9 @@ model Proposal {
   customer         Customer               @relation(fields: [customerId], references: [id])
   branchId         String
   branch           Branch                 @relation(fields: [branchId], references: [id])
+  /// Commercial owner shown as contact on proposal / PDF / public page.
+  ownerId          String?
+  owner            User?                  @relation("ProposalOwner", fields: [ownerId], references: [id])
   status           ProposalStatus         @default(DRAFT)
   /// Copied to Contract on accept/convert. Default ADVANCE.
   billingTiming    BillingTiming          @default(ADVANCE)

@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
 import { useLocale } from '@/i18n/LocaleProvider';
 import { ThemeSwitcher } from '@/theme/ThemeSwitcher';
-import { setToken } from '@/lib/api';
+import { getUserRole, setToken } from '@/lib/api';
 
 const links = [
   { href: '/', key: 'today' as const },
@@ -18,12 +19,18 @@ const links = [
   { href: '/operacoes', key: 'operations' as const },
   { href: '/financeiro', key: 'finance' as const },
   { href: '/manutencao', key: 'maintenance' as const },
+  { href: '/usuarios', key: 'users' as const, adminOnly: true },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useLocale();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    setIsAdmin(getUserRole() === 'ADMIN');
+  }, [pathname]);
 
   function logout() {
     setToken(null);
@@ -38,7 +45,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="tagline">{t.tagline}</p>
         </div>
         <nav>
-          {links.map((link) => (
+          {links
+            .filter((link) => !link.adminOnly || isAdmin)
+            .map((link) => (
             <Link
               key={link.href}
               href={link.href}

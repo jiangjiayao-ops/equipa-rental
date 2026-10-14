@@ -7,6 +7,7 @@ import { DataTable } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { useLocale } from '@/i18n/LocaleProvider';
 import { api, downloadApiFile, formatBrl } from '@/lib/api';
+import { whatsappDeepLink } from '@/lib/whatsapp';
 
 type BillingTiming = 'ADVANCE' | 'ARREARS';
 type BillingPeriod = 'WEEKLY' | 'MONTHLY' | 'YEARLY';
@@ -29,6 +30,14 @@ type Customer = {
   phone?: string | null;
 };
 type Branch = { id: string; code: string; name: string };
+type StaffUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  whatsapp?: string | null;
+  role?: string;
+};
 type Equipment = {
   id: string;
   code: string;
@@ -50,6 +59,8 @@ type Proposal = {
   publicToken?: string | null;
   notes?: string | null;
   validUntil?: string | null;
+  ownerId?: string | null;
+  owner?: StaffUser | null;
   customer: { id?: string; legalName: string; email?: string | null; phone?: string | null };
   branch: { id?: string; code: string; name?: string };
   lines: Array<{
@@ -120,6 +131,7 @@ function ProposalsPageInner() {
   const [rows, setRows] = useState<Proposal[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [staff, setStaff] = useState<StaffUser[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -146,6 +158,7 @@ function ProposalsPageInner() {
   const [form, setForm] = useState({
     customerId: '',
     branchId: '',
+    ownerId: '',
     billingTiming: 'ADVANCE' as BillingTiming,
     validUntil: '',
     notes: '',
@@ -177,11 +190,12 @@ function ProposalsPageInner() {
 
   const load = async () => {
     try {
-      const [props, cust, br, eq, cfg] = await Promise.all([
+      const [props, cust, br, eq, owners, cfg] = await Promise.all([
         api<Proposal[]>('/proposals'),
         api<Customer[]>('/customers'),
         api<Branch[]>('/branches'),
         api<Equipment[]>('/equipment'),
+        api<StaffUser[]>('/users/assignable').catch(() => []),
         api<{ email: string; whatsapp: string }>('/proposals/notify-config').catch(
           () => ({ email: 'not_configured', whatsapp: 'not_configured' }),
         ),
@@ -190,6 +204,7 @@ function ProposalsPageInner() {
       setCustomers(cust);
       setBranches(br);
       setEquipment(eq);
+      setStaff(owners);
       setNotifyConfig(cfg);
       setForm((prev) => {
         const fromQuery =
@@ -201,6 +216,7 @@ function ProposalsPageInner() {
           ...prev,
           customerId: fromQuery || prev.customerId || cust[0]?.id || '',
           branchId: prev.branchId || br[0]?.id || '',
+          ownerId: prev.ownerId || owners[0]?.id || '',
         };
       });
       setPickedId(eq[0]?.id || '');
@@ -276,6 +292,7 @@ function ProposalsPageInner() {
     return {
       customerId: form.customerId,
       branchId: form.branchId,
+      ownerId: form.ownerId || undefined,
       billingTiming: form.billingTiming,
       validUntil: form.validUntil || undefined,
       notes: form.notes || undefined,
@@ -338,6 +355,7 @@ function ProposalsPageInner() {
     setForm({
       customerId: proposal.customer.id || form.customerId,
       branchId: proposal.branch.id || form.branchId,
+      ownerId: proposal.ownerId || proposal.owner?.id || form.ownerId,
       billingTiming: proposal.billingTiming || 'ADVANCE',
       validUntil: proposal.validUntil
         ? proposal.validUntil.slice(0, 10)
@@ -534,6 +552,19 @@ function ProposalsPageInner() {
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.code} · {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>{t.proposals.owner}</span>
+              <select
+                value={form.ownerId}
+                onChange={(e) => setForm({ ...form, ownerId: e.target.value })}
+              >
+                {staff.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
                   </option>
                 ))}
               </select>
@@ -888,6 +919,51 @@ function ProposalsPageInner() {
           </p>
           {selected.status !== 'DRAFT' ? (
             <p className="muted">{t.proposals.lockedHint}</p>
+          ) : null}
+
+          {selected.owner ? (
+            <section style={{ margin: '0.75rem 0 1rem' }}>
+              <h3>{t.proposals.contactBlock}</h3>
+              <p>
+                <strong>{selected.owner.name}</strong>
+                {selected.owner.phone ? (
+                  <>
+                    <br />
+                    {selected.owner.phone}
+                  </>
+                ) : null}
+              </p>
+              <div className="actions" style={{ marginTop: '0.4rem' }}>
+                {selected.owner.email ? (
+                  <a
+                    className="ghost"
+                    href={`mailto:${selected.owner.email}?subject=${encodeURIComponent(selected.number)}`}
+                  >
+                    {t.proposals.emailLink}
+                  </a>
+                ) : null}
+                {whatsappDeepLink(
+                  selected.owner.whatsapp || selected.owner.phone,
+                  selected.number,
+                  locale === 'en' ? 'en' : 'pt-BR',
+                ) ? (
+                  <a
+                    className="ghost"
+                    href={
+                      whatsappDeepLink(
+                        selected.owner.whatsapp || selected.owner.phone,
+                        selected.number,
+                        locale === 'en' ? 'en' : 'pt-BR',
+                      )!
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t.proposals.openWhatsApp}
+                  </a>
+                ) : null}
+              </div>
+            </section>
           ) : null}
 
           <h3>{t.proposals.equipment}</h3>

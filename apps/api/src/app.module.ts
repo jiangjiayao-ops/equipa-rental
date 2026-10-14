@@ -12,11 +12,13 @@ import { OperationsModule } from './operations/operations.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProposalsModule } from './proposals/proposals.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
     PrismaModule,
     AuthModule,
+    UsersModule,
     DashboardModule,
     BranchesModule,
     OrganizationsModule,

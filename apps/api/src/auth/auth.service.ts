@@ -32,6 +32,8 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        phone: user.phone,
+        whatsapp: user.whatsapp,
       },
     };
   }
@@ -44,10 +46,13 @@ export class AuthService {
         email: true,
         name: true,
         role: true,
+        phone: true,
+        whatsapp: true,
         organizationId: true,
+        active: true,
       },
     });
-    if (!user) throw new UnauthorizedException();
+    if (!user || !user.active) throw new UnauthorizedException();
     return user;
   }
 }
